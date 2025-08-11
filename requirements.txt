@@ -7,3 +7,4 @@ pandas
 tinydb
 nest_asyncio
 apscheduler
+requests

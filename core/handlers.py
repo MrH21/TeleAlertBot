@@ -20,7 +20,7 @@ async def start(update:Update, context:ContextTypes.DEFAULT_TYPE):
         ["/help"]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    await update.message.reply_text("✨ Welcome to *Crypto Alert Bot*! Set the crypto pair you are interested in and then you can set your price target. If that price target was reached you will receive an alert message. \n\n💡_A premium version of this bot will be coming soon!_", parse_mode='Markdown')
+    await update.message.reply_text("✨ Welcome to our *Crypto Alert Bot*! \n\nSet the crypto pair you are interested in and then you can set your price target. If that price target was reached, you will receive an alert message. \n\n💡_A premium version of this bot, with more alerts and features, will be coming soon!_", parse_mode='Markdown')
     
 async def help_command(update:Update, context:ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("*Here are the basic commands available:*\n\n/setticker - to set your crypto symbol \n/settarget - to set your target price and direction eg. /settarget below 3.3321 \n/myticker - to see what your current selected symbol is \n/myalert - to see what your current alert is set to", parse_mode="Markdown")

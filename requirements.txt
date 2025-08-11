@@ -1,0 +1,10 @@
+python-telegram-bot==20.8
+fastapi==0.95.2
+uvicorn[standard]==0.22.0
+python-telegram-bot==20.3
+httpx
+aiohttp
+pandas
+tinydb
+nest_asyncio
+apscheduler

@@ -2,6 +2,7 @@ import os
 import logging
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 # Logging

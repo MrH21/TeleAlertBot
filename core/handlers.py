@@ -134,7 +134,8 @@ async def myalert(update:Update, context: ContextTypes.DEFAULT_TYPE):
 # --- Scheduled Alert ---   
 async def scheduled_alert(app):
     users_with_targets = db.search((User.target != None) & (User.direction != None))
-    logger.info(f"Found {len(users_with_targets)} users with targets")
+    tot_users = len(db.all())
+    logger.info(f"Found {len(users_with_targets)} users with targets out of {tot_users} users.")
     
     for record in users_with_targets:
         user_id = record['user_id']
@@ -155,7 +156,7 @@ async def scheduled_alert(app):
                 f"📢 *PRICE ALERT!*\n"
                 f"✅ Target hit: {symbol} went {direction} ${record['target']:,.4f} on {date}\n\n"
                 f"The target has been cleared, please set new.\n\n"
-                f"📌 Want more alerts and interval options? Pro version coming soon!"
+                f"📌 Want more alerts and interval options? Premium version coming soon!"
             )
             logger.info(f"🎯 Target hit for user {user_id}")
             db.update({'target':None, 'direction':None}, User.user_id == user_id)

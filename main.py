@@ -10,11 +10,15 @@ application = create_application()
 async def lifespan(app: FastAPI):
     # startup
     await application.initialize()
-    await application.bot.set_webhook(WEBHOOK_URL)
-    print(f"Webhook set to: {WEBHOOK_URL}")
+    # only set webhook if different or missing
+    current = await application.bot.get_webhook_info()
+    if current.url != WEBHOOK_URL:
+        await application.bot.set_webhook(WEBHOOK_URL)
+        print(f"Webhook set to: {WEBHOOK_URL}")
+    else:
+        print(f"Webhook already set to: {WEBHOOK_URL}")
     yield
-    # shutdown
-    await application.bot.delete_webhook()
+    print("Shutdown: leaving webhook active for cold start wakeup.")
     
 app = FastAPI(lifespan=lifespan)
 

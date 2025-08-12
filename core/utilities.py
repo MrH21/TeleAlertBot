@@ -2,8 +2,20 @@ import requests
 import pandas as pd
 from config import logger
 import aiohttp
-from core.db import db, User
+from core.db import db, User_Query
+from datetime import datetime, timezone
+from telegram import Update
+from telegram.ext import ContextTypes
 
+
+# --- Get the membership status ---
+async def get_plan(user):
+    # check trial expiry and return current plan
+    if user["plan"] == "premium" and datetime.now.timezone(timezone.utc) > datetime.fromisoformat(User_Query["trial_expiry"]):
+        db.update({"plan": "free"}, User_Query.user_id == user["user_id"])
+        user["plan"] = "free"
+    return user["plan"]
+        
 # --- Fetch the current price of the ticker and save as float ---
 async def fetch_current_price(symbol="XRPUSDT"):
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
@@ -23,7 +35,7 @@ async def fetch_current_price(symbol="XRPUSDT"):
     
 # --- Check the current price against the selected price target ---
 async def check_target(user_id, symbol):
-    record = db.get(User.user_id == user_id)
+    record = db.get(User_Query.user_id == user_id)
     
     if not record:
         return None, False, "N/A"

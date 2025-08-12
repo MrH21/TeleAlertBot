@@ -5,4 +5,5 @@ from tinydb import TinyDB, Query, where
 ENV = os.environ.get("ENV", "prod")
 db_path = "test_db.json" if ENV == "dev" else os.environ.get("TINYDB_PATH", "db.json")
 db = TinyDB(db_path)
-User = Query()
+# define a query
+User_Query = Query()

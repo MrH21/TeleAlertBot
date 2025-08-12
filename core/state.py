@@ -1,7 +1,9 @@
 # STATES
-SELECTING_TICKER = 1 # state identifier
-CONFIRM_TICKER_CHANGE = 2 # set state for change
+SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION = range(3) 
 
 # --- Global Dictionary ---
 user_ticker_preference = {}
 user_price_targets = {}
+
+MAX_ALERTS = {"free": 1, "premium": 5}
+PLAN_DELAY = {"free": 120, "premium": 60}

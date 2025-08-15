@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
 import pandas as pd
 from datetime import datetime, timedelta, timezone
+from core.subscription import send_upgrade_invoice
 
 # Keyboard Ticker Options
 keyboard_ticker = [['BTCUSDT', 'ETHUSDT'], ['XRPUSDT', 'SOLUSDT'], ['LINKUSDT','DOTUSDT'], ['ADAUSDT','BNBUSDT'], ['SUIUSDT','LTCUSDT']]
@@ -183,9 +184,5 @@ async def upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💳 You are currently on the *{plan.upper()}* plan with trial ending {trial_end_short}", parse_mode="Markdown")
         return
     elif plan == "free":
-        await update.message.reply_text(
-            "💳 You are currently on the *FREE* plan. Upgrade to *PREMIUM* for more alerts and features.\n\n"
-            "To upgrade, choose one of the following options:\n",
-            parse_mode="Markdown"
-        )
+        await send_upgrade_invoice(update, context)
         return

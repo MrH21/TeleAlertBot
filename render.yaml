@@ -1,6 +1,0 @@
-services:
-- type: web
-  name: telebotalert
-  env: python
-  pythonVersion: 3.11
-  

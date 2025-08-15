@@ -1,1 +1,1 @@
-{"_default": {"1": {"user_id": 7451732204, "ticker": "XRPUSDT", "target": 3.2087, "direction": "below"}}}
+{"_default": {"1": {"user_id": 7451732204, "plan": "premium", "trial_expiry": "2025-08-19T13:11:29.179045+00:00", "alerts": [{"ticker": "XRPUSDT", "target": 3.056, "direction": "below"}, {"ticker": "ADAUSDT", "target": 0.89, "direction": "above"}, {"ticker": "BTCUSDT", "target": 118000.0, "direction": "below"}]}}}

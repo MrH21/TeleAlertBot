@@ -6,4 +6,3 @@ user_ticker_preference = {}
 user_price_targets = {}
 
 MAX_ALERTS = {"free": 1, "premium": 5}
-PLAN_DELAY = {"free": 120, "premium": 60}

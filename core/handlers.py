@@ -7,6 +7,7 @@ from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKe
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 from core.subscription import send_upgrade_invoice
+import pytz
 
 # Keyboard Ticker Options
 keyboard_ticker = [['BTCUSDT', 'ETHUSDT'], ['XRPUSDT', 'SOLUSDT'], ['LINKUSDT','DOTUSDT'], ['ADAUSDT','BNBUSDT'], ['SUIUSDT','LTCUSDT']]
@@ -28,7 +29,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "user_id": user_id,
             "plan": "premium",
             "trial_expiry": trial_end,
-            "alerts": []
+            "alerts": [],
+            "subscriber": False
         })
         await update.message.reply_text(
             "✨ Welcome to our *Crypto Alert Bot*!\n\n"
@@ -94,6 +96,9 @@ async def select_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return SELECTING_DIRECTION
 
 async def select_direction(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if "ticker" not in context.user_data or "target" not in context.user_data:
+        return
+    
     direction_choice = update.message.text.strip()
     direction = "above" if "Above" in direction_choice else "below"
     now = pd.Timestamp.now()
@@ -177,12 +182,28 @@ async def upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     plan = await get_plan(user)
-    trial_end = pd.Timestamp(user.get("trial_expiry", None))
+    subscribed = user.get("subscriber", False)
+    trial_end = pd.Timestamp(user.get("trial_expiry", None)).tz_convert('UTC')
     trial_end_short = trial_end.strftime('%Y-%m-%d')  # Short date format
-    if plan == "premium":
+    now = pd.Timestamp.now(tz=pytz.UTC) # localized timestamp
+    
+    # if user is on trial version, can subscribe to premium plan - send user to lemon squeezy
+    checkout_url = f"https://lupox.lemonsqueezy.com/checkout?telegram_id={user_id}"
+    billing_url = f"https://lupox.lemonsqueezy.com/billing?telegram_id={user_id}"
+    
+    if plan == "premium" and trial_end > now and not subscribed:
         await update.message.reply_text(
-            f"💳 You are currently on the *{plan.upper()}* plan with trial ending {trial_end_short}", parse_mode="Markdown")
+            f"💳 You are currently on the <b>{plan.upper()}</b> plan with trial period ending <b>{trial_end_short}</b>\n\n"
+            f"If you would like to subscribe to the Premium Plan you can here: <a href=\"{checkout_url}\"><b>Subscribe to Premium</b></a>"
+            , parse_mode="HTML")
+        return
+    elif plan == "premium" and subscribed == True:
+        await update.message.reply_text(
+            f"💳 You are already on the <b>{plan.upper()}</b> plan.\n\n"
+            f"To manage your active subscription, follow this link: <a href=\"{billing_url}\"><b>Manage Subscription</b></a>", parse_mode="HTML")
         return
     elif plan == "free":
-        await send_upgrade_invoice(update, context)
+        update.message.reply_text(
+            f"💳 You are currently on the <b>{plan.upper()}</b> plan.\n\n"
+            f"To subscribe to Premium, please follow this link: <a href=\"{checkout_url}\"><b>Subscribe to Premium</b></a>", parse_mode="HTML")
         return

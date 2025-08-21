@@ -15,7 +15,7 @@ def create_application():
         states={
             SELECTING_TICKER: [MessageHandler(filters.TEXT & ~filters.COMMAND, select_ticker)],
             SETTING_TARGET: [MessageHandler(filters.TEXT & ~filters.COMMAND, select_target)],
-            SELECTING_DIRECTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, select_direction)]
+            SELECTING_DIRECTION: [CallbackQueryHandler(select_direction)]
         },
         fallbacks=[],
     )

@@ -67,18 +67,29 @@ async def addalert(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     keyboard_ticker = [
-        ['BTCUSDT', 'ETHUSDT'], 
-        ['XRPUSDT', 'SOLUSDT'], 
-        ['LINKUSDT','DOTUSDT'],
-        ['ADAUSDT','BNBUSDT'], 
-        ['SUIUSDT','LTCUSDT']
+        [InlineKeyboardButton('BTCUSDT', callback_data="ticker_BTCUSDT")],
+        [InlineKeyboardButton('ETHUSDT', callback_data="ticker_ETHUSDT")],
+        [InlineKeyboardButton('XRPUSDT', callback_data="ticker_XRPUSDT")],
+        [InlineKeyboardButton('SOLUSDT', callback_data="ticker_SOLUSDT")],
+        [InlineKeyboardButton('LINKUSDT', callback_data="ticker_LINKUSDT")],
+        [InlineKeyboardButton('DOTUSDT', callback_data="ticker_DOTUSDT")],
+        [InlineKeyboardButton('ADAUSDT', callback_data="ticker_ADAUSDT")],
+        [InlineKeyboardButton('BNBUSDT', callback_data="ticker_BNBUSDT")],
+        [InlineKeyboardButton('SUIUSDT', callback_data="ticker_SUIUSDT")],
+        [InlineKeyboardButton('LTCUSDT', callback_data="ticker_LTCUSDT")]
     ]
-    reply_markup = ReplyKeyboardMarkup(keyboard_ticker, one_time_keyboard=True, resize_keyboard=True)
+     
+    reply_markup = InlineKeyboardButton(keyboard_ticker)
     await update.message.reply_text("📊 Select the ticker:", reply_markup=reply_markup)
     return SELECTING_TICKER
 
 async def select_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["ticker"] = update.message.text.strip().upper()
+    query = update.callback_query
+    await query.answer()  # Acknowledge the callback query
+    
+    ticker = query.data.split("_", 1)[1]  # Extract ticker from callback data
+    context.user_data["ticker"] = ticker
+    
     current_price = await fetch_current_price(context.user_data["ticker"])
     await update.message.reply_text(f"🎯 Enter your target price for *{context.user_data['ticker']}* with current price of *{current_price:,.4f}*", parse_mode='Markdown')
     return SETTING_TARGET
@@ -90,22 +101,34 @@ async def select_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Please enter a valid number.")
         return SETTING_TARGET
 
-    keyboard_direction = [["↗ Price Above", "↘ Price Below"]]
-    reply_markup_direction = ReplyKeyboardMarkup(keyboard_direction, one_time_keyboard=True, resize_keyboard=True)
-    await update.message.reply_text(f"⚠️ Do you want to be alerted when the price goes *ABOVE* or *BELOW* this target?", parse_mode='Markdown',reply_markup=reply_markup_direction)
+    keyboard_direction = [
+        [InlineKeyboardButton("↗ Price Above", callback_data="above")],
+        [InlineKeyboardButton("↘ Price Below", callback_data="below")],
+        ]
+    reply_markup_direction = InlineKeyboardMarkup(keyboard_direction)
+    
+    await update.message.reply_text(f"⚠️ Do you want to be alerted when the price goes *ABOVE* or *BELOW* this target?"
+                                    , parse_mode='Markdown',reply_markup=reply_markup_direction)
     return SELECTING_DIRECTION
 
 async def select_direction(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer() # Acknowledge the callback query
+    
     if "ticker" not in context.user_data or "target" not in context.user_data:
         return
     
-    direction_choice = update.message.text.strip()
-    direction = "above" if "Above" in direction_choice else "below"
+    direction = query.data
     now = pd.Timestamp.now()
     last_checked = now.isoformat()
 
     user_id = update.effective_user.id
     user = db.get(User_Query.user_id == user_id)
+    
+    if not user:
+        await query.edit_message_text("❌ User not found. Please use /start first.")
+        return ConversationHandler.END
+    
     user["alerts"].append({
         "ticker": context.user_data["ticker"],
         "target": context.user_data["target"],
@@ -114,33 +137,49 @@ async def select_direction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     })
     db.update(user, User_Query.user_id == user_id)
 
-    await update.message.reply_text(
+    await query.edit_message_text(
         f"✅ Alert added: {context.user_data['ticker']} {direction.upper()} {context.user_data['target']}"
     )
     return ConversationHandler.END
 
 # --- Retrieve all user alerts ---
 async def myalerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     user_id = update.effective_user.id
     user = db.get(User_Query.user_id == user_id)
-
-    if not user or not user["alerts"]:
-        await update.message.reply_text("📭 You have no active alerts.")
-        return
+    
+    if not user:
+        await update.message.reply_text("❌ Please use /start first.")
+        return 
     
     alerts = user.get("alerts",[])
-    
+
     if not alerts:
         await update.message.reply_text("📭 You have no active alerts.")
-        return 
+        return
 
     text = "📋 *Your Current Alerts:*\n\n"
     keyboard = []
-    for idx, alert in enumerate(user["alerts"], start=1):
-        text += f"{idx}. {alert['ticker']} {alert['direction']} {alert['target']}\n"
-        keyboard.append([InlineKeyboardButton(f"❌ Delete {idx}", callback_data=f"delete_{idx}")])
+    # if user is on free plan and has more than 1 alert, only show the first alert and delete rest.
+    if user["plan"] == "free":
+        if len(alerts) > 1:
+            text += "⚠️ You are on the FREE plan and can only have 1 alert. The rest will be deleted.\n\n"
+            alerts = alerts[:1]
+            db.update({"alerts": alerts}, User_Query.user_id == user_id)
+        
+        for idx, alert in enumerate(alerts, start=1):
+            text += f"{idx}. {alert['ticker']} {alert['direction']} {alert['target']}\n"
+            keyboard.append([InlineKeyboardButton(f"❌ Delete {idx}", callback_data=f"delete_{idx}")])
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    elif user["plan"] == "premium":
+        for idx, alert in enumerate(alerts, start=1):
+            text += f"{idx}. {alert['ticker']} {alert['direction']} {alert['target']}\n"
+            keyboard.append([InlineKeyboardButton(f"❌ Delete {idx}", callback_data=f"delete_{idx}")])
+             
+        if len(alerts) >= MAX_ALERTS["premium"]:
+            text += f"⚠️ You have reached your limit of {MAX_ALERTS["premium"]} alerts."
+            
+    reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
     await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
 
 # --- Delete alert ---
@@ -199,7 +238,7 @@ async def upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     elif plan == "premium" and subscribed == True:
         await update.message.reply_text(
-            f"💳 You are already on the <b>{plan.upper()}</b> plan.\n\n"
+            f"💳 You are already subscribed to the <b>{plan.upper()}</b> plan.\n\n"
             f"To manage your active subscription, follow this link: <a href=\"{billing_url}\"><b>Manage Subscription</b></a>", parse_mode="HTML")
         return
     elif plan == "free":

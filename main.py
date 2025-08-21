@@ -27,21 +27,26 @@ async def lemon_webhook(request: Request):
     telegram_id = meta.get("telegram_id")
     data_attrs = payload.get("data", {}).get("attributes", {})
     plan_version = f"{data_attrs.get('product_name')} - {data_attrs.get('variant_name')}"
-    custom = data_attrs.get("custom", {})
-    telegram_id = custom.get("telegram_id", telegram_id)
+    
+    telegram_id = payload.get('data', {}).get('attributes', {}).get('custom', {}).get('telegram_id') \
+              or payload.get('meta', {}).get('telegram_id')
+
+    billing_url = f"https://lupox.lemonsqueezy.com/billing?telegram_id={telegram_id}"
     
     if not telegram_id:
         logger.error("Telegram ID not found in webhook payload.")
         return {"ok": False, "error": "Telegram ID not found"}
     
     User = User_Query()
+    telegram_id = int(telegram_id)  # ensure same type as in DB
     if event in ["subscription_created", "subscription_updated", "subscription_renewed", "subscription_resumed"]:
         db.update({"plan": "premium", "subscriber": True}, User.telegram_id == telegram_id)
         # Optional: send Telegram confirmation
-        await app.send_message(chat_id=telegram_id, text=f"📢 Subscription active ✅ Plan: {plan_version}")
+        await app.send_message(chat_id=telegram_id, text=f"📢 Subscription Active ✅ Plan: {plan_version}")
     elif event in ["subscription_cancelled", "subscription_expired", "payment_failed"]:
         db.update({"plan":"free", "subscriber": False}, User.telegram_id == telegram_id)
-        await app.send_message(chat_id=telegram_id, text="📢 Subscription inactive ❌\nManage your subscription here: https://lupox.lemonsqueezy.com/billing")
+        await app.send_message(chat_id=telegram_id, text=f"📢 Subscription Inactive ❌\nManage your subscription here: <a href=\"{billing_url}\"><b>Manage Subscription</b></a>")
+
 
     return {"ok": True}
 

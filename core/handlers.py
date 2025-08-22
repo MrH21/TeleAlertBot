@@ -14,8 +14,8 @@ reply_markup_ticker = ReplyKeyboardMarkup(keyboard_ticker, one_time_keyboard=Tru
 
   
 async def help_command(update:Update, context:ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("*Here are the bot commands available:*\n\n/start - Getting started with this bot. \n/addalert - to set your crypto symbol and target for the alert."
-                                    "\n/myalerts - to see what your current alerts are with option to delete.\n/help - see all commands available", parse_mode="Markdown")
+    await update.message.reply_text("*Here are the bot commands available:*\n\n/start - Getting started with this bot. \n/addalert - To set your crypto symbol and target for the alert."
+                                    "\n/myalerts - To see what your current alerts are with option to delete.\n/help - See all commands available", parse_mode="Markdown")
     
 # --- Starting function ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -32,17 +32,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "subscriber": False
         })
         await update.message.reply_text(
-            "✨ Welcome to our *Crypto Alert Bot*!\n\n"
-            "_You've been given a 7-day PREMIUM trial with up to 5 alerts.\n"
-            "After that, you'll be limited to 1 alert unless you upgrade._\n"
+            "✨✨✨ Welcome to our *Crypto Alert Bot*! ✨✨✨\n"
+            "_You've been given a 7-day PREMIUM trial with up to 5 alerts.\n\n"
+            "After that, you'll be limited to 1 alert unless you /upgrade._\n"
             "*Proceed to /addalert now*",
             parse_mode="Markdown"
         )
     else:
         plan = await get_plan(user)
         await update.message.reply_text(
-            f"Welcome back! You are on the *{plan.upper()}* plan "
-            f"with {MAX_ALERTS[plan]} alert(s) allowed.",
+            f"📢 WELCOME BACK! You are on the *{plan.upper()}* plan "
+            f"with {MAX_ALERTS[plan]} alert(s) allowed.\n\n"
+            f"Subscriber Status: {'✅ Subscribed' if user.get('subscriber', False) else '❌ Not Subscribed'}",
             parse_mode="Markdown"
         )
     

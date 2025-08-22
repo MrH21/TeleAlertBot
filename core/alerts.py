@@ -43,7 +43,7 @@ async def check_all_alerts(app):
                 # Determine user plan and interval
                 plan = await get_plan(user_record)
                 interval = 60 if plan == "premium" else 360
-                print(f"INTERVAL: Last_checked={last_checked}, now={now}, interval={interval}, diff={(now - pd.Timestamp(last_checked)).total_seconds() if last_checked else 'N/A'}")
+                
                 # Skip if not time to check yet
                 if last_checked and (now - pd.Timestamp(last_checked)).total_seconds() < interval:
                     logger.info(f"SKIPPING {symbol} due to interval.")

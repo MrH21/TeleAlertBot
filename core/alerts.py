@@ -67,9 +67,10 @@ async def check_all_alerts(app):
                     await app.bot.send_message(
                         chat_id=user_id,
                         text=(
-                            f"💥💥💥*TARGET ALERT!*💥💥💥\n"
-                            "*Your target has been hit!*\n\n"
-                            f"*{symbol}* is now *{current_price:,.4f}* (*{direction} {price_target:,.4f}*)\n"
+                            f"💥💥💥 *TARGET ALERT!* 💥💥💥\n"
+                            "*Your price target has been hit!*\n\n"
+                            f"*{symbol}* is now *{current_price:,.4f}*\n"
+                            f" (*{direction} {price_target:,.4f}*)\n\n"
                             f"_(This alert has been deleted)_"
                         )
                         ,parse_mode='Markdown'

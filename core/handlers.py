@@ -6,7 +6,6 @@ from telegram.ext import ContextTypes, ConversationHandler
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
 import pandas as pd
 from datetime import datetime, timedelta, timezone
-from core.subscription import send_upgrade_invoice
 import pytz
 
 # Keyboard Ticker Options
@@ -79,20 +78,25 @@ async def addalert(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton('LTCUSDT', callback_data="ticker_LTCUSDT")]
     ]
      
-    reply_markup = InlineKeyboardButton(keyboard_ticker)
+    reply_markup = InlineKeyboardMarkup(keyboard_ticker)
     await update.message.reply_text("📊 Select the ticker:", reply_markup=reply_markup)
     return SELECTING_TICKER
 
 async def select_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()  # Acknowledge the callback query
-    
-    ticker = query.data.split("_", 1)[1]  # Extract ticker from callback data
-    context.user_data["ticker"] = ticker
-    
-    current_price = await fetch_current_price(context.user_data["ticker"])
-    await update.message.reply_text(f"🎯 Enter your target price for *{context.user_data['ticker']}* with current price of *{current_price:,.4f}*", parse_mode='Markdown')
-    return SETTING_TARGET
+    try:
+        query = update.callback_query
+        await query.answer()  # Acknowledge the callback query
+        
+        ticker = query.data.replace("ticker_", "")
+        context.user_data["ticker"] = ticker
+        
+        current_price = await fetch_current_price(context.user_data["ticker"])
+        await query.edit_message_text(f"🎯 Enter your target price for *{context.user_data['ticker']}* with current price of *{current_price:,.4f}*", parse_mode='Markdown')
+        return SETTING_TARGET
+    except Exception as e:
+        logger.error(f"Error in select_ticker: {e}")
+        await update.message.reply_text("❌ An error occurred. Please try again.")
+        return ConversationHandler.END
     
 async def select_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:

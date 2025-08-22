@@ -6,7 +6,7 @@ from config import WEBHOOK_URL, WEBHOOK_PATH, logger
 import os
 from core.db import db, User_Query
 from telegram.ext import Application, ContextTypes
-import asyncio, json
+from core.scheduler import start_msg_scheduler
 
 application = create_application()
 
@@ -62,3 +62,4 @@ async def telegram_webhook(request: Request):
 async def startup_event():
     await application.initialize()
     await start_scheduler(application)
+    #start_msg_scheduler(application)  # Start the message scheduler in the background

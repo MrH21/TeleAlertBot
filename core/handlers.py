@@ -1,8 +1,8 @@
 from core.db import db, User_Query
 from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS
-from core.utilities import get_plan, fetch_current_price
+from core.utilities import get_plan, fetch_current_price, get_whale_txs, format_whale_alert
 from config import logger
-from telegram.ext import ContextTypes, ConversationHandler
+from telegram.ext import ContextTypes, ConversationHandler, CallbackContext
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
 import pandas as pd
 from datetime import datetime, timedelta, timezone
@@ -29,11 +29,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "plan": "premium",
             "trial_expiry": trial_end,
             "alerts": [],
+            "watch": "XRPUSDT",
+            "watch_status": True,
             "subscriber": False
         })
         await update.message.reply_text(
             "✨✨✨ Welcome to our *Crypto Alert Bot*! ✨✨✨\n"
-            "_You've been given a 7-day PREMIUM trial with up to 5 alerts.\n\n"
+            "_You've been given a 7-day PREMIUM trial with up to 5 price alerts as well as a XRP whale movement alert.\n\n"
             "After that, you'll be limited to 1 alert unless you /upgrade._\n"
             "*Proceed to /addalert now*",
             parse_mode="Markdown"
@@ -215,7 +217,57 @@ async def delete_alert_callback(update: Update, context: ContextTypes.DEFAULT_TY
         )
     else:
         await query.edit_message_text("❌ Invalid alert index.")
+        
+# --- Whale transaction watcher ---
+async def whales(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user = db.get(User_Query.user_id == user_id)
+    plan = await get_plan(user)
+    
+    if not user:
+        await update.message.reply_text("❌ Please use /start first.")
+        return
+    
+    whales = await get_whale_txs()
+    if not whales:
+        update.message.reply_text("No recent whale transactions above threshold.")
+        return
+    
+    msgs = [format_whale_alert(tx) for tx in whales]
+    full_msg = "\n\n".join(msgs)
+    
+    if plan == "premium":
+        keyboard = [
+        [InlineKeyboardButton("✅ Enable XRP Alerts", callback_data="whale_on")],
+        [InlineKeyboardButton("❌ Disable XRP Alerts", callback_data="whale_off")],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
+        update.message.reply_text(full_msg, parse_mode="Markdown", reply_markup=reply_markup)
+    elif plan == "free":
+        notice = f"💡 You are currently on the *Free* plan. To get whale alerts /upgrade"
+        full_msg = "\n".join(notice)
+        update.message.reply_text(full_msg, parse_mode="Markdown")
+    
+# --- Whale button handler ----
+async def whale_button_handler(update: Update, context:CallbackContext):
+    query = update.callback_query
+    await query.answer()
+
+    user_id = query.from_user.id
+    user = db.get(User_Query.user_id == user_id)
+    
+    if not user:
+        await update.message.reply_text("❌ Please use /start first.")
+        return
+    
+    if query.data == "whale_on":
+        user["watch_status"] = True
+        query.answer("✅ Whale alerts enabled")
+    elif query.data == "whale_off":
+        user["watch_status"] = False
+        query.answer("❌ Whale alerts disabled.")
+        
 # --- Upgrade plan ---
 async def upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id

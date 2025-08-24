@@ -1,5 +1,5 @@
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, CallbackQueryHandler, PreCheckoutQueryHandler
-from core.handlers import start, addalert, select_ticker, select_target, select_direction, myalerts, delete_alert_callback, upgrade, help_command
+from core.handlers import start, addalert, select_ticker, select_target, select_direction, myalerts, delete_alert_callback, whales, whale_button_handler, upgrade, help_command
 from config import BOT_TOKEN
 from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION
 
@@ -21,6 +21,8 @@ def create_application():
     app.add_handler(addalert_conv)
     app.add_handler(CommandHandler("myalerts", myalerts))
     app.add_handler(CallbackQueryHandler(delete_alert_callback, pattern=r"^delete_\d+$"))
+    app.add_handler(CommandHandler("whales", whales))
+    app.add_handler(CallbackQueryHandler(whale_button_handler))
     app.add_handler(CommandHandler("upgrade", upgrade))
     app.add_handler(CommandHandler("help", help_command))
 

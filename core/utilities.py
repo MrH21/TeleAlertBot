@@ -5,7 +5,7 @@ import aiohttp
 from core.db import db, User_Query
 from datetime import datetime, timezone
 from tinydb import TinyDB, Query
-from xrpl.clients import JsonRpcClient
+from xrpl.asyncio.clients import AsyncJsonRpcClient
 from xrpl.models.requests import Ledger
 
 # --- Get the membership status ---
@@ -41,8 +41,8 @@ async def fetch_current_price(symbol="XRPUSDT"):
         return None
     
 # --- Set up wallet database ---
-wdb = TinyDB("exchange_wallets.js")
-wallets_table = db.table("wallets")
+wdb = TinyDB("exchange_wallets.json")
+wallets_table = wdb.table("wallets")
 
 # --- Set up tinydby if no wallet data ---
 if len(wallets_table) == 0:
@@ -70,7 +70,7 @@ if len(wallets_table) == 0:
 
 # -- XRP Ledger Client and global ledger tracker ---
 last_ledger_index = None
-client = JsonRpcClient("https://s2.ripple.com:51234/")
+client = AsyncJsonRpcClient("https://s2.ripple.com:51234/")
 
 # --- Get the exchange by address ---
 def get_exchange_by_address(address):
@@ -79,34 +79,52 @@ def get_exchange_by_address(address):
     return result["exchange"] if result else None
 
 # Fetch recent transactions over a threshold from last ledger ---
-def get_whale_txs(min_xrp=500_000):
+async def get_whale_txs(min_xrp=1_000, lookback_ledgers=500):
     """
     Fetch whale transactions since the last ledger index we checked.
     """   
     global last_ledger_index
     # get last validated ledger index
     ledger_req = Ledger(ledger_index="validated", transactions=True, expand=True)
-    ledger_resp = client.request(ledger_req)
-    latest_index = int(ledger_resp.result["ledger"]["ledger_index"])
-    
-    # if first run, just start from the last ledger
-    if last_ledger_index is None:
-        last_ledger_index = latest_index
+    ledger_resp = await client.request(ledger_req)
+
+    # Make sure it's a Response object with a 'result' attribute
+    ledger_data = getattr(ledger_resp, "result", None)
+    if not ledger_data:
+        logger.error("Ledger request returned no data")
         return []
+
+    latest_index = int(ledger_data.get("ledger", {}).get("ledger_index", 0))
+    if latest_index == 0:
+        logger.warning("Ledger index not found in response")
+        return []
+
+
+    
+    txs = ledger_resp.result.get("ledger", {}).get("transactions", [])
+    print(f"Ledger {ledger_resp["ledger"]["ledger_index"]} fetched with {len(txs)} transactions.")
+    for tx in txs[:5]:
+        print(tx)
     
     whales = []
-    start_index = last_ledger_index + 1
-    end_index = latest_index
-    
-    for idx in range(start_index, end_index + 1):
+    start_index = max(latest_index - lookback_ledgers + 1, 0)
+        
+    for idx in range(start_index, latest_index + 1):
         req = Ledger(ledger_index = idx, transactions=True, expand=True)
-        resp = client.request(req)
+        resp = await client.request(req)
         
         txs = resp.result.get("ledger", {}).get("transactions", [])
         for tx in txs:
             if tx.get("TransactionType") == "Payment" and "Amount" in tx:
                 try:
-                    amount_xrp = int(tx["Amount"])/ 1_000_000
+                    amount_xrp = 0
+                    amt = tx["Amount"]
+                    if isinstance(amt, str):
+                        amount_xrp = int(amt) / 1_000_000
+                    elif isinstance(amt, dict):
+                        if amt.get("currency") == "XRP":
+                            amount_xrp = float(amt.get("value", 0)) # assuming value is in XRP
+                    
                     if amount_xrp >= min_xrp:
                         whales.append({
                             "amount": amount_xrp,

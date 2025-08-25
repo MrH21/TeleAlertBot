@@ -1,7 +1,9 @@
 from core.db import db, User_Query
 from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS
-from core.utilities import get_plan, fetch_current_price, get_whale_txs, format_whale_alert
+from core.utilities import get_plan, fetch_current_price, get_whale_txs, format_whale_alert, wdb
+from core.alerts import recent_whales_cache
 from config import logger
+import asyncio
 from telegram.ext import ContextTypes, ConversationHandler, CallbackContext
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
 import pandas as pd
@@ -229,27 +231,26 @@ async def whales(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     plan = await get_plan(user)
         
-    whales = await get_whale_txs(min_xrp=500_000)
-    preview = whales[-5:] if whales else []
+    preview = recent_whales_cache[-5:]
+    
+    keyboard = [
+        [InlineKeyboardButton("✅ Enable XRP Alerts", callback_data="whale_on")],
+        [InlineKeyboardButton("❌ Disable XRP Alerts", callback_data="whale_off")],
+        ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
     if not preview:
-        update.message.reply_text("No recent whale transactions above threshold.")
+        await update.message.reply_text(f"🐋 RECENT WHALE TRANSACTIONS\n\n _No recent whale transactions above threshold_", parse_mode="Markdown", reply_markup=reply_markup)
         return
     
     msgs = [format_whale_alert(tx) for tx in whales]
     full_msg = "\n\n".join(msgs)    
     
-    if plan == "premium":
-        keyboard = [
-        [InlineKeyboardButton("✅ Enable XRP Alerts", callback_data="whale_on")],
-        [InlineKeyboardButton("❌ Disable XRP Alerts", callback_data="whale_off")],
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        update.message.reply_text(full_msg, parse_mode="Markdown", reply_markup=reply_markup)
+    if plan == "premium":        
+        await update.message.reply_text(full_msg, parse_mode="Markdown", reply_markup=reply_markup)
     elif plan == "free":
         notice = f"💡 You are currently on the *Free* plan. To get whale alerts /upgrade"
-        update.message.reply_text(notice, parse_mode="Markdown")
+        await update.message.reply_text(notice, parse_mode="Markdown")
     
 # --- Whale button handler ----
 async def whale_button_handler(update: Update, context:CallbackContext):

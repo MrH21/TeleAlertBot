@@ -11,6 +11,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 # Proper scheduler instantiation
 scheduler = AsyncIOScheduler()
 
+# Max whale tx cache
+MAX_WHALE_CACHE = 25
+recent_whales_cache = []
+
 # --- Check all the alerts in the DB ---
 async def check_all_alerts(app):
     all_records = db.all()
@@ -85,19 +89,35 @@ async def check_all_alerts(app):
             except Exception as e:
                 logger.error(f"Error processing alert {alert}: {e}")
                 
-        # Whale alerts 
-        whale_cache = await get_whale_txs(min_xrp=500_000)
-        
+        # Whale alerts ---------------------------------
+        try: 
+            whale_cache = await get_whale_txs(min_xrp=500_000)
+        except Exception as e:
+            logger.error(f"Error fetching whale transactions: {e}")
+            whales = []
+            
+        # Update global cache
+        global recent_whales_cache
+        if whales:
+            recent_whales_cache.extend(whale_cache)
+            recent_whales_cache = recent_whales_cache[-MAX_WHALE_CACHE:]
+            
         for user_record in all_records:
             user_id = user_record.get('user_id')
             plan = await get_plan(user_record)
             
-            if not user_record.get('watch_status') or plan != "premium":
-                continue
-            
-            for tx in whale_cache:
-                msg = format_whale_alert(tx)
-                await app.bot.send_message(chat_id=user_id, text=msg, parse_mode='Markdown')
+            # Whale alerts
+            if user_record.get("watch_status") and plan == "premium" and whales:
+                for tx in whales:
+                    msg = format_whale_alert(tx)
+                    try:
+                        await app.bot.send_message(
+                            chat_id=user_id,
+                            text=msg,
+                            parse_mode="Markdown"
+                        )
+                    except Exception as e:
+                        logger.error(f"Error sending whale alert to {user_id}: {e}")
         
         
         # Remove alerts after processing

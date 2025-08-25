@@ -58,10 +58,18 @@ if len(wallets_table) == 0:
         {"coin": "BTC", "address": "34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo", "exchange": "Binance Cold Wallet"},
         {"coin": "BTC", "address": "bc1ql49ydapnjafl5t2cp9zqpjwe6pdgmxy98859v2", "exchange": "Robinhood Cold Wallet"},
         {"coin": "BTC", "address": "3M219KR5vEneNb47ewrPfWyb5jQ2DjxRP6", "exchange": "Binance Cold Wallet"},
-        {"coin": "BTC", "address": "bc1qgdjqv0av3q56jvd82tkdjpy7gdp9ut8tlqmgrpmv24sq90ecnvqqjwvw97", "exchange": "Bitfinex Cold Wallet"}       
+        {"coin": "BTC", "address": "bc1qgdjqv0av3q56jvd82tkdjpy7gdp9ut8tlqmgrpmv24sq90ecnvqqjwvw97", "exchange": "Bitfinex Cold Wallet"},
+        {"coin": "ETH", "address": "0xbe0eb53f46cd790cd13851d5eff43d12404d33e8", "exchange": "Binance"},
+        {"coin": "ETH", "address": "0x742d35cc6634c0532925a3b844bc454e4438f44e", "exchange": "Bitfinex"},
+        {"coin": "ETH", "address": "0x47ac0fb4f2d84898e4d9e7b4dab3c24507a6d503", "exchange": "Binance"},
+        {"coin": "BTC", "address": "0x61edcdf5bb737adffe5043706e7c5bb1f1a56eea", "exchange": "Gemini"},
+        {"coin": "BTC", "address": "0x28c6c06298d514db089934071355e5743bf21d60", "exchange": "Binance"},
+        {"coin": "BTC", "address": "0xc61b9bb3a7a0767e3179713f3a5c7a9aedce193c", "exchange": "Bitfinex"}
+        
     ])
 
-# -- XRP Ledger Client ---
+# -- XRP Ledger Client and global ledger tracker ---
+last_ledger_index = None
 client = JsonRpcClient("https://s2.ripple.com:51234/")
 
 # --- Get the exchange by address ---
@@ -70,30 +78,49 @@ def get_exchange_by_address(address):
     result = wallets_table.get(Wallet.address == address)
     return result["exchange"] if result else None
 
-# Fetch recent transactions over a threshold ---
-def get_whale_txs(limit=5, min_xrp=500_000):
+# Fetch recent transactions over a threshold from last ledger ---
+def get_whale_txs(min_xrp=500_000):
+    """
+    Fetch whale transactions since the last ledger index we checked.
+    """   
+    global last_ledger_index
+    # get last validated ledger index
     ledger_req = Ledger(ledger_index="validated", transactions=True, expand=True)
     ledger_resp = client.request(ledger_req)
-    txs = ledger_resp.result.get("ledger", {}).get("transactions",[])
+    latest_index = int(ledger_resp.result["ledger"]["ledger_index"])
+    
+    # if first run, just start from the last ledger
+    if last_ledger_index is None:
+        last_ledger_index = latest_index
+        return []
     
     whales = []
-    for tx in txs:
-        if tx.get("TransactionType") == "Payment" and "Amount" in tx:
-            try:
-                amount_xrp = int(tx["Amount"])/ 1_000_000
-                if amount_xrp >= min_xrp:
-                    whales.append({
-                        "amount": amount_xrp,
-                        "from": tx["Account"],
-                        "to": tx["Destination"],
-                        "hash": tx["hash"]
-                    })
-            except Exception as e:
-                logger.info(f"Exception with getting whale transactions: {e}")
-                continue
+    start_index = last_ledger_index + 1
+    end_index = latest_index
+    
+    for idx in range(start_index, end_index + 1):
+        req = Ledger(ledger_index = idx, transactions=True, expand=True)
+        resp = client.request(req)
+        
+        txs = resp.result.get("ledger", {}).get("transactions", [])
+        for tx in txs:
+            if tx.get("TransactionType") == "Payment" and "Amount" in tx:
+                try:
+                    amount_xrp = int(tx["Amount"])/ 1_000_000
+                    if amount_xrp >= min_xrp:
+                        whales.append({
+                            "amount": amount_xrp,
+                            "from": tx["Account"],
+                            "to": tx["Destination"],
+                            "hash": tx["hash"],
+                            "ledger_index": idx
+                        })
+                except Exception as e:
+                    logger.info(f"Exception with getting whale transactions: {e}")
+                    continue
             
-    whales = sorted(whales, key=lambda x: x["amount"], reverse=True)
-    return whales[:limit]
+    last_ledger_index = latest_index
+    return whales
 
 # --- Classify the whale transaction direction ---
 def classify_whale_tx(tx):

@@ -1,9 +1,11 @@
 # alerts.py
 from config import logger
 from core.db import db, User_Query
-from core.utilities import fetch_current_price, get_plan
+from core.utilities import fetch_current_price, get_plan, get_whale_txs, format_whale_alert
 import pandas as pd
 import asyncio
+from telegram import Update
+from telegram.ext import ContextTypes, CallbackContext
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # Proper scheduler instantiation
@@ -82,7 +84,22 @@ async def check_all_alerts(app):
                                     
             except Exception as e:
                 logger.error(f"Error processing alert {alert}: {e}")
-             
+                
+        # Whale alerts 
+        whale_cache = await get_whale_txs(min_xrp=500_000)
+        
+        for user_record in all_records:
+            user_id = user_record.get('user_id')
+            plan = await get_plan(user_record)
+            
+            if not user_record.get('watch_status') or plan != "premium":
+                continue
+            
+            for tx in whale_cache:
+                msg = format_whale_alert(tx)
+                await app.bot.send_message(chat_id=user_id, text=msg, parse_mode='Markdown')
+        
+        
         # Remove alerts after processing
         for alert in alerts_to_remove:
             user_record['alerts'].remove(alert)

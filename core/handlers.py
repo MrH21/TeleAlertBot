@@ -222,19 +222,22 @@ async def delete_alert_callback(update: Update, context: ContextTypes.DEFAULT_TY
 async def whales(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = db.get(User_Query.user_id == user_id)
-    plan = await get_plan(user)
     
     if not user:
         await update.message.reply_text("❌ Please use /start first.")
         return
     
-    whales = await get_whale_txs()
-    if not whales:
+    plan = await get_plan(user)
+        
+    whales = await get_whale_txs(min_xrp=500_000)
+    preview = whales[-5:] if whales else []
+    
+    if not preview:
         update.message.reply_text("No recent whale transactions above threshold.")
         return
     
     msgs = [format_whale_alert(tx) for tx in whales]
-    full_msg = "\n\n".join(msgs)
+    full_msg = "\n\n".join(msgs)    
     
     if plan == "premium":
         keyboard = [
@@ -246,8 +249,7 @@ async def whales(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update.message.reply_text(full_msg, parse_mode="Markdown", reply_markup=reply_markup)
     elif plan == "free":
         notice = f"💡 You are currently on the *Free* plan. To get whale alerts /upgrade"
-        full_msg = "\n".join(notice)
-        update.message.reply_text(full_msg, parse_mode="Markdown")
+        update.message.reply_text(notice, parse_mode="Markdown")
     
 # --- Whale button handler ----
 async def whale_button_handler(update: Update, context:CallbackContext):
@@ -262,11 +264,11 @@ async def whale_button_handler(update: Update, context:CallbackContext):
         return
     
     if query.data == "whale_on":
-        user["watch_status"] = True
-        query.answer("✅ Whale alerts enabled")
+        db.update({"watch_status": True}, User_Query.user_id == user_id)
+        await query.edit_message_text("✅ Whale alerts enabled")
     elif query.data == "whale_off":
-        user["watch_status"] = False
-        query.answer("❌ Whale alerts disabled.")
+        db.update({"watch_status": False}, User_Query.user_id == user_id)
+        await query.edit_message_text("❌ Whale alerts disabled.")
         
 # --- Upgrade plan ---
 async def upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE):

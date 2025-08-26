@@ -2,6 +2,7 @@
 from config import logger
 from core.db import db, User_Query
 from core.utilities import fetch_current_price, get_plan, get_whale_txs, format_whale_alert
+from core.cache import recent_whales_cache, MAX_WHALE_CACHE
 import pandas as pd
 import asyncio
 from telegram import Update
@@ -10,10 +11,6 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # Proper scheduler instantiation
 scheduler = AsyncIOScheduler()
-
-# Max whale tx cache
-MAX_WHALE_CACHE = 25
-recent_whales_cache = []
 
 # --- Check all the alerts in the DB ---
 async def check_all_alerts(app):
@@ -87,45 +84,47 @@ async def check_all_alerts(app):
                     alert['last_checked'] = now.strftime('%Y-%m-%dT%H:%M:%S.%f%z')
                                     
             except Exception as e:
-                logger.error(f"Error processing alert {alert}: {e}")
-                
-        # Whale alerts ---------------------------------
-        try: 
-            whale_cache = await get_whale_txs(min_xrp=500_000)
-        except Exception as e:
-            logger.error(f"Error fetching whale transactions: {e}")
-            whales = []
-            
-        # Update global cache
-        global recent_whales_cache
-        if whales:
-            recent_whales_cache.extend(whale_cache)
-            recent_whales_cache = recent_whales_cache[-MAX_WHALE_CACHE:]
-            
-        for user_record in all_records:
-            user_id = user_record.get('user_id')
-            plan = await get_plan(user_record)
-            
-            # Whale alerts
-            if user_record.get("watch_status") and plan == "premium" and whales:
-                for tx in whales:
-                    msg = format_whale_alert(tx)
-                    try:
-                        await app.bot.send_message(
-                            chat_id=user_id,
-                            text=msg,
-                            parse_mode="Markdown"
-                        )
-                    except Exception as e:
-                        logger.error(f"Error sending whale alert to {user_id}: {e}")
-        
-        
+                logger.error(f"Error processing alert {alert}: {e}")                
+                        
         # Remove alerts after processing
         for alert in alerts_to_remove:
             user_record['alerts'].remove(alert)
         # Update DB once per user
         db.update({'alerts': user_record['alerts']}, User_Query.user_id == user_id)
+                
+    # Whale alerts ---------------------------------
+    try: 
+        whale_cache = await get_whale_txs(min_xrp=100)
+        # Update global cache        
+        if whale_cache:
+            global recent_whales_cache
+            recent_whales_cache.extend(whale_cache)
+            recent_whales_cache = recent_whales_cache[-MAX_WHALE_CACHE:]
+            print(f"Found {len(whale_cache)} new whale transaction(s) from running scheduler.")
+        else:
+            print("No new whale transactions found from running scheduler.")
+    except Exception as e:
+        logger.error(f"Error fetching whale transactions: {e}")
+        whale_cache = []
+            
+    for user_record in all_records:
+        user_id = user_record.get('user_id')
+        plan = await get_plan(user_record)
         
+        # Whale alerts
+        if user_record.get("watch_status") and plan == "premium" and recent_whales_cache:
+            for tx in recent_whales_cache:
+                msg = format_whale_alert(tx)
+                try:
+                    await app.bot.send_message(
+                        chat_id=user_id,
+                        text=msg,
+                        parse_mode="Markdown"
+                    )
+                except Exception as e:
+                    logger.error(f"Error sending whale alert to {user_id}: {e}")
+        
+       
 
 # --- Start the scheduler ---
 async def start_scheduler(app, global_tick=60):

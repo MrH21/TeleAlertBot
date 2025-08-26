@@ -1,7 +1,7 @@
 from core.db import db, User_Query
 from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS
-from core.utilities import get_plan, fetch_current_price, get_whale_txs, format_whale_alert, wdb
-from core.alerts import recent_whales_cache
+from core.utilities import get_plan, fetch_current_price, format_whale_alert
+from core.cache import recent_whales_cache, MAX_WHALE_CACHE
 from config import logger
 import asyncio
 from telegram.ext import ContextTypes, ConversationHandler, CallbackContext
@@ -232,6 +232,7 @@ async def whales(update: Update, context: ContextTypes.DEFAULT_TYPE):
     plan = await get_plan(user)
         
     preview = recent_whales_cache[-5:]
+    logger.info(f"Recent whale cache for user {user_id}: {preview} on whales command")
     
     keyboard = [
         [InlineKeyboardButton("✅ Enable XRP Alerts", callback_data="whale_on")],

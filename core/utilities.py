@@ -3,8 +3,10 @@ import pandas as pd
 from config import logger
 import aiohttp
 from core.db import db, User_Query
+from core.cache import recent_whales_cache, MAX_WHALE_CACHE
 from datetime import datetime, timezone
 from tinydb import TinyDB, Query
+import asyncio
 from xrpl.asyncio.clients import AsyncJsonRpcClient
 from xrpl.models.requests import Ledger
 
@@ -78,94 +80,184 @@ def get_exchange_by_address(address):
     result = wallets_table.get(Wallet.address == address)
     return result["exchange"] if result else None
 
+# --- Test function to get wallet data ---
+async def test_latest_ledger():
+    try:
+        ledger_req = Ledger(ledger_index="validated")
+        ledger_resp = await client.request(ledger_req)
+        latest_index = int(ledger_resp.result["ledger_index"])
+
+        # Then fetch with transactions + expand
+        ledger_req = Ledger(ledger_index=latest_index, transactions=True, expand=True)
+        ledger_resp = await client.request(ledger_req)
+        txs = ledger_resp.result.get("ledger", {}).get("transactions", [])
+        print(f"Ledger {latest_index} has {len(txs)} transactions")
+
+    except Exception as e:
+        print("Error fetching latest ledger:", e)
+
 # Fetch recent transactions over a threshold from last ledger ---
-async def get_whale_txs(min_xrp=1_000, lookback_ledgers=500):
+async def get_whale_txs(min_xrp=1_000, lookback_ledgers=100):
     """
-    Fetch whale transactions since the last ledger index we checked.
-    """   
-    global last_ledger_index
-    # get last validated ledger index
-    ledger_req = Ledger(ledger_index="validated", transactions=True, expand=True)
-    ledger_resp = await client.request(ledger_req)
-
-    # Make sure it's a Response object with a 'result' attribute
-    ledger_data = getattr(ledger_resp, "result", None)
-    if not ledger_data:
-        logger.error("Ledger request returned no data")
-        return []
-
-    latest_index = int(ledger_data.get("ledger", {}).get("ledger_index", 0))
-    if latest_index == 0:
-        logger.warning("Ledger index not found in response")
-        return []
-
-
-    
-    txs = ledger_resp.result.get("ledger", {}).get("transactions", [])
-    print(f"Ledger {ledger_resp["ledger"]["ledger_index"]} fetched with {len(txs)} transactions.")
-    for tx in txs[:5]:
-        print(tx)
-    
+    Fetch whale transactions (Payment & OfferCreate) since the last ledger index we checked.
+    """
+    global last_ledger_index, recent_whales_cache
     whales = []
-    start_index = max(latest_index - lookback_ledgers + 1, 0)
-        
+
+    def extract_xrp_amount(value):
+        """Normalize XRP amount from drops or object form into float XRP."""
+        if isinstance(value, str):  # drops
+            return int(value) / 1_000_000
+        elif isinstance(value, dict) and value.get("currency") == "XRP":
+            return float(value.get("value", 0))
+        return 0
+
+    try:
+        # Get latest validated ledger index
+        ledger_req = Ledger(ledger_index="validated")
+        ledger_resp = await client.request(ledger_req)
+        latest_index = int(ledger_resp.result["ledger_index"])
+    except Exception as e:
+        logger.error(f"Error fetching latest ledger index: {e}")
+        return []
+
+    # Decide where to start scanning
+    if last_ledger_index:
+        start_index = last_ledger_index + 1
+    else:
+        start_index = max(latest_index - lookback_ledgers + 1, 0)
+
     for idx in range(start_index, latest_index + 1):
-        req = Ledger(ledger_index = idx, transactions=True, expand=True)
-        resp = await client.request(req)
-        
-        txs = resp.result.get("ledger", {}).get("transactions", [])
-        for tx in txs:
-            if tx.get("TransactionType") == "Payment" and "Amount" in tx:
-                try:
-                    amount_xrp = 0
-                    amt = tx["Amount"]
-                    if isinstance(amt, str):
-                        amount_xrp = int(amt) / 1_000_000
-                    elif isinstance(amt, dict):
-                        if amt.get("currency") == "XRP":
-                            amount_xrp = float(amt.get("value", 0)) # assuming value is in XRP
-                    
-                    if amount_xrp >= min_xrp:
-                        whales.append({
-                            "amount": amount_xrp,
-                            "from": tx["Account"],
-                            "to": tx["Destination"],
-                            "hash": tx["hash"],
-                            "ledger_index": idx
-                        })
-                except Exception as e:
-                    logger.info(f"Exception with getting whale transactions: {e}")
-                    continue
-            
+        try:
+            resp = await client.request(
+                Ledger(ledger_index=idx, transactions=True, expand=True)
+            )
+            txs = resp.result.get("ledger", {}).get("transactions", [])
+
+            print(f"Ledger {idx} fetched with {len(txs)} transactions")
+            if txs:
+                print("Sample tx:", txs[0])
+
+            for tx in txs:
+                tx_json = tx.get("tx_json", {})
+                tx_type = tx_json.get("TransactionType")
+
+                # --- Payment whales ---
+                if tx_type == "Payment" and "Amount" in tx_json:
+                    try:
+                        print("INFO ----- Type of Payment ----")
+                        amount_xrp = extract_xrp_amount(tx_json["Amount"])
+                        if amount_xrp >= min_xrp:
+                            whales.append({
+                                "amount": amount_xrp,
+                                "from": tx_json.get("Account"),
+                                "to": tx_json.get("Destination"),
+                                "hash": tx["hash"],
+                                "ledger_index": idx,
+                                "type": "Payment"
+                            })
+                    except Exception as e:
+                        logger.info(f"Exception parsing Payment tx in ledger {idx}: {e}")
+                        continue
+
+                # --- OfferCreate whales (DEX trades) ---
+                elif tx_type == "OfferCreate":
+                    try:
+                        print("INFO ----- Type of OfferCreate ----")
+                        taker_gets = tx_json.get("TakerGets")
+                        taker_pays = tx_json.get("TakerPays")
+
+                        amount_xrp = 0
+                        direction = None
+
+                        if taker_gets:
+                            amount_xrp = extract_xrp_amount(taker_gets)
+                            direction = "Gets" if amount_xrp else direction
+                        if not amount_xrp and taker_pays:
+                            amount_xrp = extract_xrp_amount(taker_pays)
+                            direction = "Pays" if amount_xrp else direction
+
+                        if amount_xrp >= min_xrp:
+                            whales.append({
+                                "amount": amount_xrp,
+                                "from": tx_json.get("Account"),
+                                "to": "DEX",
+                                "hash": tx["hash"],
+                                "ledger_index": idx,
+                                "type": "OfferCreate",
+                                "direction": direction
+                            })
+                    except Exception as e:
+                        logger.info(f"Exception parsing OfferCreate tx in ledger {idx}: {e}")
+                        continue
+
+        except Exception as e:
+            logger.error(f"Error fetching ledger {idx}: {e}")
+            continue
+
+        await asyncio.sleep(0.3)  # polite rate limit
+
+    # Update whale cache
+    if whales:
+        recent_whales_cache.extend(whales)
+        recent_whales_cache = recent_whales_cache[-MAX_WHALE_CACHE:]
+    else:
+        print("No new whale transactions found.")
+
+    # Update last processed ledger
     last_ledger_index = latest_index
+
     return whales
+
+
 
 # --- Classify the whale transaction direction ---
 def classify_whale_tx(tx):
-    from_ex = get_exchange_by_address(tx["from"])
-    to_ex = get_exchange_by_address(tx["to"])
+    """
+    Determines the type of whale movement.
+    For Payments: inflow/outflow to exchange or unknown.
+    For DEX trades: indicates whether XRP was offered or received.
+    """
+    tx_type = tx.get("type", "Payment")
     
-    if to_ex:
-        return "Exchange Inflow", to_ex, "🚨"
-    elif from_ex: 
-        return "Exchange Outflow", from_ex, "🟢"
-    else:
-        return "Unknown Transfer", None, "❓"
-    
+    if tx_type == "Payment":
+        from_ex = get_exchange_by_address(tx["from"])
+        to_ex = get_exchange_by_address(tx["to"])
+
+        if to_ex:
+            return "Exchange Inflow", to_ex, "🚨"
+        elif from_ex:
+            return "Exchange Outflow", from_ex, "🟢"
+        else:
+            return "Unknown Transfer", None, "❓"
+
+    elif tx_type == "OfferCreate":
+        direction = tx.get("direction", "Unknown")
+        return f"DEX Trade ({direction})", "DEX", "⚡"
+
+    return "Unknown", None, "❓"
+
+
 # --- Format the whale alert ---
 def format_whale_alert(tx):
+    """
+    Formats the alert message for Telegram, showing type, amount, USD value, and link.
+    """
     xrp_price = fetch_current_price()
-    classification, exchange, emoji = classify_whale_tx(tx)
+    classification, entity, emoji = classify_whale_tx(tx)
     usd_value = tx["amount"] * xrp_price
-    
+
     msg = (
         f"{emoji} *XRP Whale Alert*\n"
-        f"{tx['amount']:,} XRP (~${usd_value:,.4f})\n"
+        f"{tx['amount']:,} XRP (~${usd_value:,.2f})\n"
         f"From: `{tx['from']}`\n"
         f"To: `{tx['to']}`\n"
         f"Type: *{classification}*"
     )
-    if exchange:
-        msg += f" ({exchange})"
+
+    if entity and entity not in ["DEX"]:
+        msg += f" ({entity})"
+
     msg += f"\n[View Tx](https://xrpscan.com/tx/{tx['hash']})"
+
     return msg

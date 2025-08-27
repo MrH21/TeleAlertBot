@@ -230,28 +230,38 @@ async def whales(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     plan = await get_plan(user)
-        
+    
+    # Take the last 5 whale transactions
     preview = recent_whales_cache[-5:]
     logger.info(f"Recent whale cache for user {user_id}: {preview} on whales command")
     
     keyboard = [
         [InlineKeyboardButton("✅ Enable XRP Alerts", callback_data="whale_on")],
         [InlineKeyboardButton("❌ Disable XRP Alerts", callback_data="whale_off")],
-        ]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     if not preview:
-        await update.message.reply_text(f"🐋 RECENT WHALE TRANSACTIONS\n\n _No recent whale transactions above threshold_", parse_mode="Markdown", reply_markup=reply_markup)
+        await update.message.reply_text(
+            "🐋 RECENT WHALE TRANSACTIONS\n\n_No recent whale transactions found, wait for next_", 
+            parse_mode="Markdown", 
+            reply_markup=reply_markup
+        )
         return
     
-    msgs = [format_whale_alert(tx) for tx in whales]
-    full_msg = "\n\n".join(msgs)    
+    # Format messages
+    xrp_price = await fetch_current_price("XRPUSDT")
+    msgs = [format_whale_alert(tx, xrp_price) for tx in preview]
+    header = "🐋 *RECENT WHALE TRANSACTIONS* 🐋\n\n"
+   
+    full_msg = header + "\n\n".join(msgs)
     
-    if plan == "premium":        
+    if plan == "premium":
         await update.message.reply_text(full_msg, parse_mode="Markdown", reply_markup=reply_markup)
-    elif plan == "free":
-        notice = f"💡 You are currently on the *Free* plan. To get whale alerts /upgrade"
+    else:  # Free plan
+        notice = "💡 You are currently on the *Free* plan. To get whale alerts /upgrade"
         await update.message.reply_text(notice, parse_mode="Markdown")
+
     
 # --- Whale button handler ----
 async def whale_button_handler(update: Update, context:CallbackContext):

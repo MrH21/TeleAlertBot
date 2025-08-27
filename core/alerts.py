@@ -94,7 +94,7 @@ async def check_all_alerts(app):
                 
     # Whale alerts ---------------------------------
     try: 
-        whale_cache = await get_whale_txs(min_xrp=100)
+        whale_cache = await get_whale_txs(min_xrp=500_000)
         # Update global cache        
         if whale_cache:
             global recent_whales_cache
@@ -110,11 +110,12 @@ async def check_all_alerts(app):
     for user_record in all_records:
         user_id = user_record.get('user_id')
         plan = await get_plan(user_record)
+        current_price = await fetch_current_price("XRPUSDT")
         
         # Whale alerts
         if user_record.get("watch_status") and plan == "premium" and recent_whales_cache:
             for tx in recent_whales_cache:
-                msg = format_whale_alert(tx)
+                msg = format_whale_alert(tx, current_price)
                 try:
                     await app.bot.send_message(
                         chat_id=user_id,

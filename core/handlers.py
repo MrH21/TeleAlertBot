@@ -317,3 +317,36 @@ async def upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💳 You are currently on the <b>{plan.upper()}</b> plan.\n\n"
             f"To subscribe to Premium, please follow this link: <a href=\"{checkout_url}\"><b>Subscribe to Premium</b></a>", parse_mode="HTML")
         return
+    
+# --- Broadcast message to all users (admin only) ---
+ADMIN_ID = 7451732204
+
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # restrict to admin only
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ You are not authorized to use this command.")
+        return
+    
+    if not context.args:
+        await update.message.reply_text("❌ Please provide a message to broadcast.")
+        return
+    
+    message = " ".join(context.args)
+    
+    # fetch all user ids
+    users = db.all()
+    sent_count = 0
+    failed_count = 0
+    
+    for user in users:
+        user_id = user["user_id"]
+        try:
+            await context.bot.send_message(chat_id=user_id, text=message, parse_mode="Markdown")
+            sent_count += 1
+            await asyncio.sleep(0.5)  # slight delay to avoid hitting rate limits
+        except Exception as e:
+            logger.error(f"Failed to send message to {user_id}: {e}")
+            failed_count += 1
+            
+    await update.message.reply_text(f"✅ Broadcast completed. Sent: {sent_count}, Failed: {failed_count}")
+    

@@ -64,8 +64,7 @@ if len(wallets_table) == 0:
         {"coin": "XRP", "address": "rDAE53VfMvftPB4ogpWGWvzkQxfht6JPxr", "exchange": "Binance"},
         {"coin": "XRP", "address": "rNU4eAowPuixS5ZCWaRL72UUeKgxcKExpK", "exchange": "Binance"},
         {"coin": "XRP", "address": "rBtttd61FExHC68vsZ8dqmS3DfjFEceA1A", "exchange": "Binance"},
-        {"coin": "XRP", "address": "rwpTh9DDa52XkM9nTKp2QrJuCGV5d1mQVP", "exchange": "CoinBase"},
-        
+        {"coin": "XRP", "address": "rwpTh9DDa52XkM9nTKp2QrJuCGV5d1mQVP", "exchange": "CoinBase"},        
         {"coin": "BTC", "address": "34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo", "exchange": "Binance Cold Wallet"},
         {"coin": "BTC", "address": "bc1ql49ydapnjafl5t2cp9zqpjwe6pdgmxy98859v2", "exchange": "Robinhood Cold Wallet"},
         {"coin": "BTC", "address": "3M219KR5vEneNb47ewrPfWyb5jQ2DjxRP6", "exchange": "Binance Cold Wallet"},

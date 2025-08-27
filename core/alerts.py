@@ -2,7 +2,7 @@
 from config import logger
 from core.db import db, User_Query
 from core.utilities import fetch_current_price, get_plan, get_whale_txs, format_whale_alert
-from core.cache import recent_whales_cache, MAX_WHALE_CACHE
+from core.cache import recent_whales_cache, user_sent_whales, MAX_WHALE_CACHE
 import pandas as pd
 import asyncio
 from telegram import Update
@@ -97,7 +97,7 @@ async def check_all_alerts(app):
         whale_cache = await get_whale_txs(min_xrp=500_000)
         # Update global cache        
         if whale_cache:
-            global recent_whales_cache
+            global recent_whales_cache, user_sent_whales
             recent_whales_cache.extend(whale_cache)
             recent_whales_cache = recent_whales_cache[-MAX_WHALE_CACHE:]
             print(f"Found {len(whale_cache)} new whale transaction(s) from running scheduler.")
@@ -112,9 +112,13 @@ async def check_all_alerts(app):
         plan = await get_plan(user_record)
         current_price = await fetch_current_price("XRPUSDT")
         
+        sent_hashes = user_sent_whales.setdefault(user_id, set())
+        
         # Whale alerts
         if user_record.get("watch_status") and plan == "premium" and recent_whales_cache:
             for tx in recent_whales_cache:
+                if tx["hash"] in sent_hashes:
+                    continue
                 msg = format_whale_alert(tx, current_price)
                 try:
                     await app.bot.send_message(
@@ -122,6 +126,7 @@ async def check_all_alerts(app):
                         text=msg,
                         parse_mode="Markdown"
                     )
+                    sent_hashes.add(tx["hash"])
                 except Exception as e:
                     logger.error(f"Error sending whale alert to {user_id}: {e}")
         

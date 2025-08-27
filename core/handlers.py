@@ -2,7 +2,7 @@ from core.db import db, User_Query
 from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS
 from core.utilities import get_plan, fetch_current_price, format_whale_alert
 from core.cache import recent_whales_cache, MAX_WHALE_CACHE
-from config import logger
+from config import logger, ADMIN_ID
 import asyncio
 from telegram.ext import ContextTypes, ConversationHandler, CallbackContext
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
@@ -243,7 +243,7 @@ async def whales(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not preview:
         await update.message.reply_text(
-            "🐋 RECENT WHALE TRANSACTIONS\n\n_No recent whale transactions found, wait for next_", 
+            "🐋 RECENT WHALE TRANSACTIONS\n\n_No recent whale transactions found at the moment_", 
             parse_mode="Markdown", 
             reply_markup=reply_markup
         )
@@ -318,9 +318,6 @@ async def upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"To subscribe to Premium, please follow this link: <a href=\"{checkout_url}\"><b>Subscribe to Premium</b></a>", parse_mode="HTML")
         return
     
-# --- Broadcast message to all users (admin only) ---
-ADMIN_ID = 7451732204
-
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # restrict to admin only
     if update.effective_user.id != ADMIN_ID:

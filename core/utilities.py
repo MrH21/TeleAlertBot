@@ -57,6 +57,15 @@ if len(wallets_table) == 0:
         {"coin": "XRP", "address": "rDxJNbV23mu9xsWoQHoBqZQvc77YcbJXwb", "exchange": "Upbit"},
         {"coin": "XRP", "address": "rw7m3CtVHwGSdhFjV4MyJozmZJv3DYQnsA", "exchange": "Bitbank"},
         {"coin": "XRP", "address": "r99QSej32nAcjQAri65vE5ZXjw6xpUQ2Eh", "exchange": "Coincheck"},
+        {"coin": "XRP", "address": "rNxp4h8apvRis6mJf9Sh8C6iRxfrDWN7AV", "exchange": "Binance"},
+        {"coin": "XRP", "address": "rsbfd5ZYWqy6XXf6hndPbRjDAzfmWc1CeQ", "exchange": "Luno"},
+        {"coin": "XRP", "address": "rwnYLUsoBQX3ECa1A5bSKLdbPoHKnqf63J", "exchange": "CoinBase"},    
+        {"coin": "XRP", "address": "rw2ciyaNshpHe7bCHo4bRWq6pqqynnWKQg", "exchange": "CoinBase"},
+        {"coin": "XRP", "address": "rDAE53VfMvftPB4ogpWGWvzkQxfht6JPxr", "exchange": "Binance"},
+        {"coin": "XRP", "address": "rNU4eAowPuixS5ZCWaRL72UUeKgxcKExpK", "exchange": "Binance"},
+        {"coin": "XRP", "address": "rBtttd61FExHC68vsZ8dqmS3DfjFEceA1A", "exchange": "Binance"},
+        {"coin": "XRP", "address": "rwpTh9DDa52XkM9nTKp2QrJuCGV5d1mQVP", "exchange": "CoinBase"},
+        
         {"coin": "BTC", "address": "34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo", "exchange": "Binance Cold Wallet"},
         {"coin": "BTC", "address": "bc1ql49ydapnjafl5t2cp9zqpjwe6pdgmxy98859v2", "exchange": "Robinhood Cold Wallet"},
         {"coin": "BTC", "address": "3M219KR5vEneNb47ewrPfWyb5jQ2DjxRP6", "exchange": "Binance Cold Wallet"},
@@ -149,8 +158,6 @@ async def get_whale_txs(min_xrp=500_000, lookback_ledgers=100):
                             "ledger_index": idx,
                             "type": "Payment"
                         })
-                    else:
-                        print(f"Payment     tx in ledger {idx} below threshold: {amount_xrp} XRP")
                 except Exception as e:
                     logger.info(f"Exception parsing Payment tx in ledger {idx}: {e}")
                     continue
@@ -188,8 +195,6 @@ async def get_whale_txs(min_xrp=500_000, lookback_ledgers=100):
                                 "ledger_index": idx,
                                 "type": "OfferExecute"
                             })
-                        else:
-                            print(f"OfferCreate tx in ledger {idx} below threshold: {amount_xrp} XRP")
 
         await asyncio.sleep(0.3)  # polite rate limit
 

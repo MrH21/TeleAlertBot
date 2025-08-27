@@ -233,7 +233,7 @@ async def whales(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Take the last 5 whale transactions
     preview = recent_whales_cache[-5:]
-    logger.info(f"Recent whale cache for user {user_id}: {preview} on whales command")
+    #logger.info(f"Recent whale cache for user {user_id}: {preview} on whales command")
     
     keyboard = [
         [InlineKeyboardButton("✅ Enable XRP Alerts", callback_data="whale_on")],

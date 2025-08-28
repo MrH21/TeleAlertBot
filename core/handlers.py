@@ -36,9 +36,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "subscriber": False
         })
         await update.message.reply_text(
-            "✨✨✨ Welcome to our *Crypto Alert Bot*! ✨✨✨\n"
+            "✨ Welcome to our *Crypto Alert Bot*! ✨\n\n"
             "_You've been given a 7-day PREMIUM trial with up to 5 price alerts as well as a XRP whale movement alert.\n\n"
-            "After that, you'll be limited to 1 alert unless you /upgrade._\n"
+            "After that, you'll be limited to 1 alert unless you /upgrade._\n\n"
             "*Proceed to /addalert now*",
             parse_mode="Markdown"
         )
@@ -47,7 +47,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"📢 WELCOME BACK! You are on the *{plan.upper()}* plan "
             f"with {MAX_ALERTS[plan]} alert(s) allowed.\n\n"
-            f"Subscriber Status: {'✅ Subscribed' if user.get('subscriber', False) else '❌ Not Subscribed'}",
+            f"Subscriber Status: {'✅ Subscribed' if user.get('subscriber', False) else '❌ Not Subscribed'}\n\n",
+            f"Whale Alerts: {'✅ Enabled' if user.get('watch_status', False) else '❌ Disabled'}\n\n",
             parse_mode="Markdown"
         )
     
@@ -233,6 +234,7 @@ async def whales(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Take the last 5 whale transactions
     preview = recent_whales_cache[-5:]
+
     #logger.info(f"Recent whale cache for user {user_id}: {preview} on whales command")
     
     keyboard = [
@@ -252,7 +254,7 @@ async def whales(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Format messages
     xrp_price = await fetch_current_price("XRPUSDT")
     msgs = [format_whale_alert(tx, xrp_price) for tx in preview]
-    header = "🐋 *RECENT WHALE TRANSACTIONS* 🐋\n\n"
+    header = f"🐋 *RECENT WHALE TRANSACTIONS*\n\n"
    
     full_msg = header + "\n\n".join(msgs)
     

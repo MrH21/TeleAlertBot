@@ -1,7 +1,7 @@
 # alerts.py
 from config import logger
 from core.db import db, User_Query
-from core.utilities import fetch_current_price, get_plan, get_whale_txs, format_whale_alert
+from core.utilities import fetch_current_price, get_plan, get_whale_txs, format_whale_alert, update_recent_whales
 from core.cache import recent_whales_cache, user_sent_whales, MAX_WHALE_CACHE
 import pandas as pd
 import asyncio
@@ -98,7 +98,7 @@ async def check_all_alerts(app):
         # Update global cache        
         if whale_cache:
             global recent_whales_cache, user_sent_whales
-            recent_whales_cache.extend(whale_cache)
+            update_recent_whales(whale_cache)
             recent_whales_cache = recent_whales_cache[-MAX_WHALE_CACHE:]
             print(f"Found {len(whale_cache)} new whale transaction(s) from running scheduler.")
         else:

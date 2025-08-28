@@ -4,6 +4,7 @@ from config import logger
 import aiohttp
 from core.db import db, User_Query
 from core.cache import recent_whales_cache, MAX_WHALE_CACHE
+from core.wallets_data import wallets
 from datetime import datetime, timezone
 from tinydb import TinyDB, Query
 import asyncio
@@ -48,35 +49,7 @@ wallets_table = wdb.table("wallets")
 
 # --- Set up tinydby if no wallet data ---
 if len(wallets_table) == 0:
-    wallets_table.insert_multiple([
-        {"coin": "XRP", "address": "rs8ZPbYqgecRcDzQpJYAMhSxSi5htsjnza", "exchange": "Binance"},
-        {"coin": "XRP", "address": "rPyCQm8E5j78PDbrfKF24fRC7qUAk1kDMZ", "exchange": "Bithump"},
-        {"coin": "XRP", "address": "rsXT3AQqhHDusFs3nQQuwcA1yXRLZJAXKw", "exchange": "Uphold"},
-        {"coin": "XRP", "address": "rMQ98K56yXJbDGv49ZSmW51sLn94Xe1mu1", "exchange": "Ripple"},
-        {"coin": "XRP", "address": "rKveEyR1SrkWbJX214xcfH43ZsoGMb3PEv", "exchange": "Ripple"},
-        {"coin": "XRP", "address": "rDxJNbV23mu9xsWoQHoBqZQvc77YcbJXwb", "exchange": "Upbit"},
-        {"coin": "XRP", "address": "rw7m3CtVHwGSdhFjV4MyJozmZJv3DYQnsA", "exchange": "Bitbank"},
-        {"coin": "XRP", "address": "r99QSej32nAcjQAri65vE5ZXjw6xpUQ2Eh", "exchange": "Coincheck"},
-        {"coin": "XRP", "address": "rNxp4h8apvRis6mJf9Sh8C6iRxfrDWN7AV", "exchange": "Binance"},
-        {"coin": "XRP", "address": "rsbfd5ZYWqy6XXf6hndPbRjDAzfmWc1CeQ", "exchange": "Luno"},
-        {"coin": "XRP", "address": "rwnYLUsoBQX3ECa1A5bSKLdbPoHKnqf63J", "exchange": "CoinBase"},    
-        {"coin": "XRP", "address": "rw2ciyaNshpHe7bCHo4bRWq6pqqynnWKQg", "exchange": "CoinBase"},
-        {"coin": "XRP", "address": "rDAE53VfMvftPB4ogpWGWvzkQxfht6JPxr", "exchange": "Binance"},
-        {"coin": "XRP", "address": "rNU4eAowPuixS5ZCWaRL72UUeKgxcKExpK", "exchange": "Binance"},
-        {"coin": "XRP", "address": "rBtttd61FExHC68vsZ8dqmS3DfjFEceA1A", "exchange": "Binance"},
-        {"coin": "XRP", "address": "rwpTh9DDa52XkM9nTKp2QrJuCGV5d1mQVP", "exchange": "CoinBase"},        
-        {"coin": "BTC", "address": "34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo", "exchange": "Binance Cold Wallet"},
-        {"coin": "BTC", "address": "bc1ql49ydapnjafl5t2cp9zqpjwe6pdgmxy98859v2", "exchange": "Robinhood Cold Wallet"},
-        {"coin": "BTC", "address": "3M219KR5vEneNb47ewrPfWyb5jQ2DjxRP6", "exchange": "Binance Cold Wallet"},
-        {"coin": "BTC", "address": "bc1qgdjqv0av3q56jvd82tkdjpy7gdp9ut8tlqmgrpmv24sq90ecnvqqjwvw97", "exchange": "Bitfinex Cold Wallet"},
-        {"coin": "ETH", "address": "0xbe0eb53f46cd790cd13851d5eff43d12404d33e8", "exchange": "Binance"},
-        {"coin": "ETH", "address": "0x742d35cc6634c0532925a3b844bc454e4438f44e", "exchange": "Bitfinex"},
-        {"coin": "ETH", "address": "0x47ac0fb4f2d84898e4d9e7b4dab3c24507a6d503", "exchange": "Binance"},
-        {"coin": "BTC", "address": "0x61edcdf5bb737adffe5043706e7c5bb1f1a56eea", "exchange": "Gemini"},
-        {"coin": "BTC", "address": "0x28c6c06298d514db089934071355e5743bf21d60", "exchange": "Binance"},
-        {"coin": "BTC", "address": "0xc61b9bb3a7a0767e3179713f3a5c7a9aedce193c", "exchange": "Bitfinex"}
-        
-    ])
+    wallets_table.insert_multiple(wallets)
 
 # -- XRP Ledger Client and global ledger tracker ---
 last_ledger_index = None
@@ -99,7 +72,19 @@ def extract_xrp_amount(amount_field):
             return int(amount_field.get("value", 0))
     return 0
 
-# Fetch recent transactions over a threshold from last ledger ---
+# --- Update recent whales cache ----
+def update_recent_whales(new_whales: list[dict]):
+    global recent_whales_cache
+    existing_hashes = {tx["hash"] for tx in recent_whales_cache}
+    
+    for tx in new_whales:
+        if tx["hash"] not in existing_hashes:
+            recent_whales_cache.append(tx)
+            
+    if len(recent_whales_cache) > MAX_WHALE_CACHE:
+        recent_whales_cache = recent_whales_cache[-MAX_WHALE_CACHE:]
+
+# --- Fetch recent transactions over a threshold from last ledger ---
 async def get_whale_txs(min_xrp=500_000, lookback_ledgers=100):
     """
     Fetch whale transactions (Payment & OfferCreate) since the last ledger index we checked.
@@ -210,7 +195,6 @@ async def get_whale_txs(min_xrp=500_000, lookback_ledgers=100):
     return whales
 
 
-
 # --- Classify the whale transaction direction ---
 def classify_whale_tx(tx):
     """
@@ -252,7 +236,7 @@ def format_whale_alert(tx, xrp_price=None):
         f"*Amount*: {tx['amount']:,} XRP (~${usd_value:,.2f})\n"
         f"*From*: `{tx['from']}`\n"
         f"*To*: `{tx['to']}`\n"
-        f"*Type*: *{classification}*"
+        f"*Type*: 🔎 *{classification}*"
     )
 
     if entity:

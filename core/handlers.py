@@ -191,7 +191,7 @@ async def myalerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard.append([InlineKeyboardButton(f"❌ Delete {idx}", callback_data=f"delete_{idx}")])
              
         if len(alerts) >= MAX_ALERTS["premium"]:
-            text += f"⚠️ You have reached your limit of {MAX_ALERTS["premium"]} alerts."
+            text += f"⚠️ You have reached your limit of {MAX_ALERTS['premium']} alerts."
             
     reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
     await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")

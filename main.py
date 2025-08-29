@@ -2,11 +2,10 @@ from fastapi import FastAPI, Request
 from telegram import Update
 from bot import create_application
 from core.alerts import start_scheduler
-from config import logger
+from config import logger, WEBHOOK_PATH
 import os
 import asyncio
 from core.db import db, User_Query
-from telegram.ext import Application, ContextTypes
 
 application = create_application()
 
@@ -58,7 +57,7 @@ async def lemon_webhook(request: Request):
 # --------------------------
 # Telegram webhook
 # --------------------------
-@app.post("/telegram_webhook")
+@app.post(WEBHOOK_PATH)
 async def telegram_webhook(request: Request):
     try:    
         data = await request.json()

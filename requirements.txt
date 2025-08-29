@@ -9,3 +9,4 @@ nest_asyncio
 apscheduler
 requests
 pytz
+xrpl-py==4.3.0

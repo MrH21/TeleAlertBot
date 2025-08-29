@@ -60,18 +60,25 @@ async def lemon_webhook(request: Request):
 # --------------------------
 @app.post("/telegram_webhook")
 async def telegram_webhook(request: Request):
-    data = await request.json()
-    update = Update.de_json(data, application.bot)
-    await application.process_update(update)
-    return {"ok": True}
+    try:    
+        data = await request.json()
+        update = Update.de_json(data, application.bot)
+        await application.process_update(update)
+        return {"ok": True}
+    except Exception as e:
+        logger.error(f"Error processing Telegram webhook: {e}")
+        return {"ok": False, "error": str(e)}
 
 # --------------------------
 # Startup event
 # --------------------------
 @app.on_event("startup")
 async def startup_event():
-    logger.info("Initializing Telegram application...")
-    await application.initialize()
-    # Launch the scheduler as a background task
-    asyncio.create_task(start_scheduler(application))
-    logger.info("Scheduler started in background.")
+    try:
+        logger.info("MAIN: Initializing Telegram application...")
+        await application.initialize()
+        # Launch the scheduler as a background task
+        asyncio.create_task(start_scheduler(application))
+        logger.info("MAIN: Scheduler started in background.")
+    except Exception as e:
+        logger.error(f"Error during startup: {e}")

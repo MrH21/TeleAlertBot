@@ -8,3 +8,4 @@ tinydb
 nest_asyncio
 apscheduler
 requests
+pytz

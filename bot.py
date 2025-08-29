@@ -2,6 +2,15 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from core.handlers import start, addalert, select_ticker, select_target, select_direction, myalerts, delete_alert_callback, whales, whale_button_handler, upgrade, help_command, stats, broadcast
 from config import BOT_TOKEN
 from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION
+import warnings
+from telegram import PTBUserWarning
+
+# Suppress that specific PTB warning
+warnings.filterwarnings(
+    action="ignore",
+    message=r".*CallbackQueryHandler",
+    category=PTBUserWarning
+)
 
 # --- Create the Telegram Application (bot) with the necessary handlers ---
 def create_application():

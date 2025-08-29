@@ -16,6 +16,7 @@ def create_application():
             SETTING_TARGET: [MessageHandler(filters.TEXT & ~filters.COMMAND, select_target)],
             SELECTING_DIRECTION: [CallbackQueryHandler(select_direction)]
         },
+        per_message=False,
         fallbacks=[],
     )
     app.add_handler(addalert_conv)

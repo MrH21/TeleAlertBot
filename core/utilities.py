@@ -116,8 +116,10 @@ async def get_whale_txs(min_xrp=500_000, lookback_ledgers=100):
             logger.error(f"Error fetching ledger {idx}: {e}")
             continue
         
+        '''
         if txs:
             print("Sample tx:", txs[0])
+        '''
 
         for tx in txs:
             tx_json = tx.get("tx_json", {})
@@ -232,7 +234,7 @@ def format_whale_alert(tx, xrp_price=None):
     usd_value = tx["amount"] * xrp_price if xrp_price else 0
 
     msg = (
-        f"{emoji} *XRP Whale Alert* {emoji}\n"
+        f"{emoji} *XRP Whale Alert* {emoji}\n\n"
         f"*Amount*: {tx['amount']:,} XRP (~${usd_value:,.2f})\n"
         f"*From*: `{tx['from']}`\n"
         f"*To*: `{tx['to']}`\n"

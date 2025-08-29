@@ -17,7 +17,10 @@ reply_markup_ticker = ReplyKeyboardMarkup(keyboard_ticker, one_time_keyboard=Tru
   
 async def help_command(update:Update, context:ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("*Here are the bot commands available:*\n\n/start - Getting started with this bot. \n/addalert - To set your crypto symbol and target for the alert."
-                                    "\n/myalerts - To see what your current alerts are with option to delete.\n/help - See all commands available", parse_mode="Markdown")
+                                    "\n/myalerts - To see what your current alerts are with option to delete."
+                                    "\n/whales - To see recent XRP whale transactions and enable/disable whale alerts."
+                                    "\n/upgrade - To upgrade your plan to premium for more alerts."
+                                    "\n/help - See all commands available", parse_mode="Markdown")
     
 # --- Starting function ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -37,18 +40,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         })
         await update.message.reply_text(
             "✨ Welcome to our *Crypto Alert Bot*! ✨\n\n"
-            "_You've been given a 7-day PREMIUM trial with up to 5 price alerts as well as a XRP whale movement alert.\n\n"
-            "After that, you'll be limited to 1 alert unless you /upgrade._\n\n"
+            "_You've been given a 7-day PREMIUM trial with up to 8 price alerts as well as a XRP whale movement alert.\n\n"
+            "After that, you'll be limited to 2 alert unless you /upgrade._\n\n"
             "*Proceed to /addalert now*",
             parse_mode="Markdown"
         )
     else:
         plan = await get_plan(user)
         await update.message.reply_text(
-            f"📢 WELCOME BACK! You are on the *{plan.upper()}* plan "
+            f"✨✨ *WELCOME BACK!* ✨✨\n\n"
+            f"You are on the *{plan.upper()}* plan "
             f"with {MAX_ALERTS[plan]} alert(s) allowed.\n\n"
-            f"Subscriber Status: {'✅ Subscribed' if user.get('subscriber', False) else '❌ Not Subscribed'}\n\n",
-            f"Whale Alerts: {'✅ Enabled' if user.get('watch_status', False) else '❌ Disabled'}\n\n",
+            f"*Subscriber Status*: {'✅ Subscribed' if user.get('subscriber', False) else '❌ Not Subscribed'}\n\n"
+            f"*Whale Alerts*: {'✅ Enabled' if user.get('watch_status', False) else '❌ Disabled'}\n\n",
             parse_mode="Markdown"
         )
     
@@ -170,11 +174,11 @@ async def myalerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = "📋 *Your Current Alerts:*\n\n"
     keyboard = []
-    # if user is on free plan and has more than 1 alert, only show the first alert and delete rest.
+    # if user is on free plan and has more than 2 alert, only show the two alerts and delete rest.
     if user["plan"] == "free":
-        if len(alerts) > 1:
-            text += "⚠️ You are on the FREE plan and can only have 1 alert. The rest will be deleted.\n\n"
-            alerts = alerts[:1]
+        if len(alerts) > MAX_ALERTS["free"]:
+            text += "⚠️ You are on the FREE plan and can only have 2 alerts. The rest will be deleted.\n\n"
+            alerts = alerts[:2]
             db.update({"alerts": alerts}, User_Query.user_id == user_id)
         
         for idx, alert in enumerate(alerts, start=1):
@@ -319,7 +323,8 @@ async def upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💳 You are currently on the <b>{plan.upper()}</b> plan.\n\n"
             f"To subscribe to Premium, please follow this link: <a href=\"{checkout_url}\"><b>Subscribe to Premium</b></a>", parse_mode="HTML")
         return
-    
+
+# --- Broadcast message to all users (admin only) ---
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # restrict to admin only
     if update.effective_user.id != ADMIN_ID:
@@ -349,3 +354,32 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     await update.message.reply_text(f"✅ Broadcast completed. Sent: {sent_count}, Failed: {failed_count}")
     
+# --- Retrieve bot statistics (admin only) ---   
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # restrict to admin only
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ You are not authorized to use this command.")
+        return
+    
+    message = f"*📊 Bot Statistics:*\n\n"
+    
+    try:
+        # fetch all user data
+        total_users = len(db)
+        total_subscribers = len([user for user in db.all() if user.get("subscriber", False)])
+        total_free = len([user for user in db.all() if user.get("plan") == "free"])
+        total_premium = len([user for user in db.all() if user.get("plan") == "premium"])
+        total_alerts = sum(len(user.get("alerts", [])) for user in db.all())    
+        total_whale_watchers = len([user for user in db.all() if user.get("watch_status", False)])
+        
+        message += (f"👥 Total Users: {total_users}\n"
+                    f"💎 Total Subscribers: {total_subscribers}\n"
+                    f"🆓 Free Plan Users: {total_free}\n"
+                    f"⚡ Premium Plan Users: {total_premium}\n"
+                    f"🚨 Total Alerts Set: {total_alerts}\n"
+                    f"🐋 Total Whale Alert Subscribers: {total_whale_watchers}\n")
+    except Exception as e:
+        logger.error(f"Error fetching stats: {e}")
+        message += "❌ Error fetching statistics."
+            
+    await update.message.reply_text(message, parse_mode="Markdown")

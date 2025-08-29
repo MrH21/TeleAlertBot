@@ -214,14 +214,16 @@ def classify_whale_tx(tx):
             return "Exchange Inflow", to_ex, "🚨🚨🚨"
         elif from_ex:
             return "Exchange Outflow", from_ex, "🟢🟢🟢"
+        elif from_ex and to_ex:
+            return "Exchange Transfer", f"{from_ex} → {to_ex}", "🔄"
         else:
-            return "Unknown Transfer", None, "❓"
+            return "Unknown Transfer", None, "💡"
 
     elif tx_type == "OfferCreate":
         direction = tx.get("direction", "Unknown")
         return f"DEX Trade ({direction})", "DEX", "⚡⚡⚡"
 
-    return "Unknown", None, "❓"
+    return "Unknown", None, "💡"
 
 
 # --- Format the whale alert ---

@@ -19,7 +19,7 @@ async def help_command(update:Update, context:ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("*Here are the bot commands available:*\n\n/start - Getting started with this bot. \n/addalert - To set your crypto symbol and target for the alert."
                                     "\n/myalerts - To see what your current alerts are with option to delete."
                                     "\n/whales - To see recent XRP whale transactions and enable/disable whale alerts."
-                                    "\n/upgrade - To upgrade your plan to premium for more alerts."
+                                    "\n/upgrade - To upgrade your plan to premium for more alerts and features."
                                     "\n/help - See all commands available", parse_mode="Markdown")
     
 # --- Starting function ---

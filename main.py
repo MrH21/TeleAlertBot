@@ -1,12 +1,12 @@
 from fastapi import FastAPI, Request
-from telegram import Update, Bot
+from telegram import Update
 from bot import create_application
 from core.alerts import start_scheduler
-from config import WEBHOOK_URL, WEBHOOK_PATH, logger
+from config import logger
 import os
+import asyncio
 from core.db import db, User_Query
 from telegram.ext import Application, ContextTypes
-from core.scheduler import start_msg_scheduler
 
 application = create_application()
 
@@ -23,14 +23,18 @@ async def lemon_webhook(request: Request):
     print("Webhook payload:", payload)  # For testing
     
     event = payload.get("event")
-    meta = payload.get("meta", {})
-    telegram_id = meta.get("telegram_id")
-    data_attrs = payload.get("data", {}).get("attributes", {})
-    plan_version = f"{data_attrs.get('product_name')} - {data_attrs.get('variant_name')}"
-    
     telegram_id = payload.get('data', {}).get('attributes', {}).get('custom', {}).get('telegram_id') \
               or payload.get('meta', {}).get('telegram_id')
-
+              
+    if not telegram_id:
+        logger.error("Telegram ID not found in webhook payload.")
+        return {"ok": False, "error": "Telegram ID not found"}
+    
+    telegram_id = int(telegram_id)  # ensure same type as in DB
+    User = User_Query()
+       
+    data_attrs = payload.get("data", {}).get("attributes", {})
+    plan_version = f"{data_attrs.get('product_name')} - {data_attrs.get('variant_name')}" 
     billing_url = f"https://lupox.lemonsqueezy.com/billing?telegram_id={telegram_id}"
     
     if not telegram_id:
@@ -51,6 +55,9 @@ async def lemon_webhook(request: Request):
     return {"ok": True}
 
 
+# --------------------------
+# Telegram webhook
+# --------------------------
 @app.post("/telegram_webhook")
 async def telegram_webhook(request: Request):
     data = await request.json()
@@ -58,8 +65,13 @@ async def telegram_webhook(request: Request):
     await application.process_update(update)
     return {"ok": True}
 
+# --------------------------
+# Startup event
+# --------------------------
 @app.on_event("startup")
 async def startup_event():
+    logger.info("Initializing Telegram application...")
     await application.initialize()
-    await start_scheduler(application)
-    #start_msg_scheduler(application)  # Start the message scheduler in the background
+    # Launch the scheduler as a background task
+    asyncio.create_task(start_scheduler(application))
+    logger.info("Scheduler started in background.")

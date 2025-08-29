@@ -1,8 +1,9 @@
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, CallbackQueryHandler, PTBUserWarning
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, CallbackQueryHandler
 from core.handlers import start, addalert, select_ticker, select_target, select_direction, myalerts, delete_alert_callback, whales, whale_button_handler, upgrade, help_command, stats, broadcast
 from config import BOT_TOKEN
 from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION
 import warnings
+from telegram.warnings import PTBUserWarning
 
 # Suppress that specific PTB warning
 warnings.filterwarnings(

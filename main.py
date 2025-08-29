@@ -57,7 +57,7 @@ async def lemon_webhook(request: Request):
 # --------------------------
 # Telegram webhook
 # --------------------------
-@app.post(WEBHOOK_PATH)
+@app.post("/telegram_webhook")
 async def telegram_webhook(request: Request):
     try:    
         data = await request.json()

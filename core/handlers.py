@@ -55,6 +55,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"*Whale Alerts*: {'✅ Enabled' if user.get('watch_status', False) else '❌ Disabled'}\n\n",
             parse_mode="Markdown"
         )
+        
+# --- Snapshot of the current prices ----
+async def snapshot(update:Update, context: ContextTypes.DEFAULT_TYPE):
+
+    message = f"👀 Snapshot of the symbol prices"
+    
+    xrp = await fetch_current_price("XRPUSDT")
+    btc = await fetch_current_price("BTCUSDT")
+    
+    message += (f"XRP Ripple: {xrp:,.4f}\n"
+                f"XRP Ripple: {xrp:,.4f}\n") 
+    
+    await update.message.reply_text(message, parse_mode="Markdown")
+
     
 # --- Add alert function ----
 async def addalert(update: Update, context: ContextTypes.DEFAULT_TYPE):

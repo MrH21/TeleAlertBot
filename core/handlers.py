@@ -1,7 +1,8 @@
 from core.db import db, User_Query
 from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS
-from core.utilities import get_plan, fetch_current_price, format_whale_alert
-from core.cache import recent_whales_cache, MAX_WHALE_CACHE
+from core.utilities import get_plan, fetch_current_price
+from core.cache import recent_whales_cache
+from ripple.xrp_functions import format_whale_alert, get_xrp_health
 from config import logger, ADMIN_ID
 import asyncio
 from telegram.ext import ContextTypes, ConversationHandler, CallbackContext
@@ -18,7 +19,7 @@ reply_markup_ticker = ReplyKeyboardMarkup(keyboard_ticker, one_time_keyboard=Tru
 async def help_command(update:Update, context:ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("*Here are the bot commands available:*\n\n/start - Getting started with this bot. \n/addalert - To set your crypto symbol and target for the alert."
                                     "\n/myalerts - To see what your current alerts are with option to delete."
-                                    "\n/whales - To see recent XRP whale transactions and enable/disable whale alerts."
+                                    "\n/ripple - To see recent XRP whale transactions and enable/disable whale alerts."
                                     "\n/upgrade - To upgrade your plan to premium for more alerts and features."
                                     "\n/help - See all commands available", parse_mode="Markdown")
     
@@ -227,7 +228,7 @@ async def delete_alert_callback(update: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text("❌ Invalid alert index.")
         
 # --- Whale transaction watcher ---
-async def whales(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def ripple(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = db.get(User_Query.user_id == user_id)
     
@@ -236,6 +237,9 @@ async def whales(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     plan = await get_plan(user)
+    
+    message = await get_xrp_health()  # Ensure connection to XRPL server
+    await update.message.reply_text(f"{message}", parse_mode="Markdown")
     
     # Take the last 5 whale transactions
     preview = recent_whales_cache[-5:]

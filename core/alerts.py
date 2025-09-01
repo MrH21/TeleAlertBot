@@ -1,12 +1,11 @@
 # alerts.py
 from config import logger
 from core.db import db, User_Query
-from core.utilities import fetch_current_price, get_plan, get_whale_txs, format_whale_alert, update_recent_whales
+from core.utilities import fetch_current_price, get_plan
+from ripple.xrp_functions import get_whale_txs, format_whale_alert, update_recent_whales
 from core.cache import recent_whales_cache, user_sent_whales, MAX_WHALE_CACHE
 import pandas as pd
 import asyncio
-from telegram import Update
-from telegram.ext import ContextTypes, CallbackContext
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # Proper scheduler instantiation

@@ -110,7 +110,7 @@ async def get_whale_txs(min_xrp=500_000, lookback_ledgers=100):
                 Ledger(ledger_index=idx, transactions=True, expand=True)
             )
             txs = resp.result.get("ledger", {}).get("transactions", [])
-            print(f"Ledger {idx} fetched with {len(txs)} transactions")
+            #print(f"Ledger {idx} fetched with {len(txs)} transactions")
             
         except Exception as e:
             logger.error(f"Error fetching ledger {idx}: {e}")

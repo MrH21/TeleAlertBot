@@ -4,10 +4,11 @@ from core.cache import recent_whales_cache, MAX_WHALE_CACHE
 from ripple.wallets_data import wallets
 from tinydb import TinyDB, Query
 import asyncio
-from telegram.ext import ContextTypes
-from telegram import Update
-from xrpl.asyncio.clients import AsyncJsonRpcClient
-from xrpl.models.requests import Ledger, ServerInfo, AccountInfo
+import aiohttp
+from datetime import datetime, timezone
+import requests
+from xrpl.asyncio.clients import AsyncJsonRpcClient, AsyncWebsocketClient
+from xrpl.models.requests import Ledger, ServerInfo, AccountObjects
 
 # --- Set up wallet database ---
 wdb = TinyDB("exchange_wallets.json")
@@ -268,3 +269,87 @@ def format_whale_alert(tx, xrp_price=None):
     msg += f"\n[View Tx](https://xrpscan.com/tx/{tx['hash']})"
 
     return msg
+
+# --- Obtain Escrow information ---
+
+RIPPLE_ESCROW_ACCOUNTS = [
+    "rMp7Vjb52z7xvef96dgE6FQVfcJp2tE2f2",
+    "rPVMhWBsfF9iMXYj3aAzJVkPDTFNSyWdKy",
+    "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh",
+    "rKVEGLiv4JgBDG3y62zXkWc6sYJ5kVh3z",
+    "rELeasERs3m4inA1UinRLTpXemqyStqzwh"
+    
+]
+escrow_db = TinyDB("escrow_data.json")
+
+def get_monthly_escrow_summary():
+    total_locked = 0
+    escrow_details = []
+
+    # Iterate over all known accounts
+    for account in RIPPLE_ESCROW_ACCOUNTS:
+        url = f"https://api.xrpscan.com/api/v1/account/{account}/escrows"
+        resp = requests.get(url)
+        if resp.status_code != 200:
+            continue
+        data = resp.json()
+
+        for e in data:
+            amount = int(e["Amount"]) / 1_000_000  # drops → XRP
+            total_locked += amount
+
+            # Convert FinishAfter (Ripple epoch) to datetime
+            finish_after = e.get("FinishAfter")
+            if finish_after:
+                finish_date = datetime.datetime(2000, 1, 1) + datetime.timedelta(seconds=int(finish_after))
+                finish_str = finish_date.strftime("%Y-%m-%d")
+            else:
+                finish_str = "N/A"
+
+            escrow_details.append({
+                "account": e["Account"],
+                "amount": amount,
+                "release_date": finish_str
+            })
+
+    # Determine current month
+    now = datetime.now(timezone.utc)
+    month_key = now.strftime("%Y-%m")
+
+    Entry = Query()
+    last_record = escrow_db.get(Entry.month == month_key)
+
+    if not last_record:
+        # First snapshot for the month
+        escrow_db.insert({
+            "month": month_key,
+            "total_locked": total_locked,
+            "released": 0,
+            "re_escrowed": 0
+        })
+        released = 0
+        re_escrowed = 0
+    else:
+        prev_total = last_record["total_locked"]
+        # Estimate released & re-escrowed
+        released = max(prev_total - total_locked, 0)
+        re_escrowed = max(total_locked - (prev_total - released), 0)
+        # Update record
+        escrow_db.update({
+            "total_locked": total_locked,
+            "released": released,
+            "re_escrowed": re_escrowed
+        }, Entry.month == month_key)
+
+    # Build summary message
+    message = f"📊 XRP Escrow Update ({month_key})\n\n"
+    message += f"🔒 Total Locked: {total_locked:,.0f} XRP\n"
+    message += f"📤 Released: {released:,.0f} XRP\n"
+    message += f"🔁 Re-escrowed: {re_escrowed:,.0f} XRP\n"
+    message += f"📈 Net Circulation Change: {released - re_escrowed:,.0f} XRP\n\n"
+
+    # Show top escrows (first 10 for brevity)
+    for e in escrow_details[:10]:
+        message += f"- {e['amount']:,.0f} XRP from {e['account']}, release: {e['release_date']}\n"
+
+    return message

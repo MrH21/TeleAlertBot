@@ -2,7 +2,7 @@ from core.db import db, User_Query
 from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS
 from core.utilities import get_plan, fetch_current_price
 from core.cache import recent_whales_cache
-from ripple.xrp_functions import format_whale_alert, get_xrp_health
+from ripple.xrp_functions import format_whale_alert, get_xrp_health, get_monthly_escrow_summary
 from config import logger, ADMIN_ID
 import asyncio
 from telegram.ext import ContextTypes, ConversationHandler, CallbackContext
@@ -241,6 +241,13 @@ async def ripple(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = await get_xrp_health()  # Ensure connection to XRPL server
     await update.message.reply_text(f"{message}", parse_mode="Markdown")
     
+    try:
+        escrow_info = get_monthly_escrow_summary()
+        print("Running --- Escrow")
+        logger.info(f"Escrow Data: ---- {escrow_info}")
+    except Exception as e:
+        logger.error(f"Error with calling the escrow function - {e}")
+    
     # Take the last 5 whale transactions
     preview = recent_whales_cache[-5:]
 
@@ -272,7 +279,7 @@ async def ripple(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:  # Free plan
         notice = "💡 You are currently on the *Free* plan. To get whale alerts /upgrade"
         await update.message.reply_text(notice, parse_mode="Markdown")
-
+        
     
 # --- Whale button handler ----
 async def whale_button_handler(update: Update, context:CallbackContext):

@@ -30,19 +30,19 @@ def classify_activity(age: int, fee: float, active: int, new: int):
     """
     # Ledger Age indicator
     if age <= 5:
-        age_label, age_emoji = ("✅", "Ledger Age OK")
+        age_label, age_emoji = ("✅", "OK")
     elif age <= 10:
-        age_label, age_emoji = ("⚠️", "Ledger Age Medium")
+        age_label, age_emoji = ("⚠️", "Medium")
     else:
-        age_label, age_emoji = ("❌", "Ledger Age High")
+        age_label, age_emoji = ("❌", "High")
 
     # Base Fee indicator
     if fee <= 0.0001:
-        fee_label, fee_emoji = "Fee Low", "✅"
+        fee_label, fee_emoji = "Low", "✅"
     elif fee <= 0.001:
-        fee_label, fee_emoji = "Fee Medium", "⚠️"
+        fee_label, fee_emoji = "Medium", "⚠️"
     else:
-        fee_label, fee_emoji = "Fee High", "❌"
+        fee_label, fee_emoji = "High", "❌"
     # TPS
     '''if tps > 20:
         tps_label, tps_emoji = "High", "🚀"

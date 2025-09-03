@@ -22,57 +22,134 @@ if len(wallets_table) == 0:
 last_ledger_index = None
 client = AsyncJsonRpcClient("https://s2.ripple.com:51234/")
 
-# --- Extract XRP health from server info ---
-async def get_xrp_health():
-    try:
-        query_response = await client.request(ServerInfo())
-        server_info = query_response.result
-        print(server_info)
-        info = server_info["info"]
-        validated_ledger = info["validated_ledger"]
-        cache = info["cache"]
-    except Exception as e:
-        logger.error(f"XRP health error {e}")
-    
-    message = f"🔋 *XRP Ledger Health:*\n\n"
-        
-    # Ledger info
+# --- Classify Network Activity ---
+def classify_activity(age: int, fee: float, active: int, new: int):
+    """
+    Returns emojis + labels for age, fee, TPS, active, and new addresses.
+    Thresholds are arbitrary and can be tuned.
+    """
     # Ledger Age indicator
-    age = validated_ledger['age']
     if age <= 5:
-        age_status = "✅"
+        age_label, age_emoji = ("✅", "Ledger Age OK")
     elif age <= 10:
-        age_status = "⚠️"
+        age_label, age_emoji = ("⚠️", "Ledger Age Medium")
     else:
-        age_status = "❌"
+        age_label, age_emoji = ("❌", "Ledger Age High")
 
     # Base Fee indicator
-    fee = validated_ledger['base_fee_xrp']
     if fee <= 0.0001:
-        fee_status = "✅"
+        fee_label, fee_emoji = "Fee Low", "✅"
     elif fee <= 0.001:
-        fee_status = "⚠️"
+        fee_label, fee_emoji = "Fee Medium", "⚠️"
     else:
-        fee_status = "❌"
-    
-    message += f"🔹 *Ledger Info* \n"
-    message += f"- Ledger Index: {validated_ledger['seq']} ~ _latest validated ledger_\n"
-    message += f"- Ledger Age: {validated_ledger['age']} sec {age_status} ~ _seconds since last ledger closed_\n"
-    message += f"- Base Fee: {validated_ledger['base_fee_xrp']} {fee_status} ~ _minimum XRP required_\n\n"
-    
-    # Cache info
-    message += f"💾 *Cache*\n"
-    message += f"- Size: {cache['size']}\n"
-    message += f"- Enabled: {cache['is_enabled']}\n"
-    message += f"- Full: {cache['is_full']}\n\n"
+        fee_label, fee_emoji = "Fee High", "❌"
+    # TPS
+    '''if tps > 20:
+        tps_label, tps_emoji = "High", "🚀"
+    elif tps > 5:
+        tps_label, tps_emoji = "Medium", "⚡"
+    else:
+        tps_label, tps_emoji = "Low", "💤"'''
 
-    # Network info
-    message += f"🌐 *Network*\n"
-    message += f"- Validation Quorum: {info['validation_quorum']}\n"
-    message += f"- Uptime: {info['uptime']} sec\n"
-    message += f"- Rippled Version: {info['rippled_version']}\n"
+    # Active addresses
+    if active > 2000:
+        active_label, active_emoji = "High", "🌋"
+    elif active > 500:
+        active_label, active_emoji = "Medium", "🔥"
+    else:
+        active_label, active_emoji = "Low", "🌱"
+
+    # New addresses
+    if new > 200:
+        new_label, new_emoji = "High", "✨"
+    elif new > 50:
+        new_label, new_emoji = "Medium", "🌟"
+    else:
+        new_label, new_emoji = "Low", "🔹"
+
+    return {
+        "age": (age_label, age_emoji),
+        "fee": (fee_label, fee_emoji),
+        #"tps": (tps_label, tps_emoji),
+        "active": (active_label, active_emoji),
+        "new": (new_label, new_emoji),
+    }
+
+# --- Extract XRP health from server info ---
+async def get_xrp_health(lookback_ledgers: int = 20):
+    message = "❌ Could not fetch XRP health info."  # default if something fails
+
+    try:
+        # --- Get server info ---
+        resp = await client.request(ServerInfo())
+        info = resp.result["info"]
+        validated_ledger = info["validated_ledger"]
+        latest_index = validated_ledger["seq"]
+        ledger_resp = await client.request(Ledger(ledger_index=latest_index, transactions=True, expand=True))
+        txs = len(ledger_resp.result.get("ledger", {}).get("transactions", []))
+        # --- Initialize counters ---
+        tx_total = 0
+        active_addrs, new_addrs = set(), set()
+        
+        '''
+        # --- Loop over recent ledgers ---
+        for idx in range(latest_index - lookback_ledgers + 1, latest_index + 1):
+            ledger_resp = await client.request(Ledger(ledger_index=idx, transactions=True, expand=True))
+            txs = ledger_resp.result.get("ledger", {}).get("transactions", [])
+            tx_total += len(txs)
+
+            for tx in txs:
+                tx_json = tx.get("tx_json", {})
+                if "Account" in tx_json:
+                    active_addrs.add(tx_json["Account"])
+                if tx_json.get("TransactionType") == "Payment" and "Destination" in tx_json:
+                    active_addrs.add(tx_json["Destination"])
+
+                for node in tx.get("meta", {}).get("AffectedNodes", []):
+                    created = node.get("CreatedNode")
+                    if created and created.get("LedgerEntryType") == "AccountRoot":
+                        new_addrs.add(created["NewFields"]["Account"])
+
+            await asyncio.sleep(0.1)  # throttle to avoid overloading node
+
+        # --- TPS estimate ---
+        tps_est = tx_total / (lookback_ledgers * 4)  # approx 4s per ledger
+
+        # --- Classify activity levels ---
+        activity = classify_activity(
+            age=validated_ledger["age"],
+            fee=validated_ledger["base_fee_xrp"],
+            tps=tps_est,
+            active=len(active_addrs),
+            new=len(new_addrs)
+        )'''
+        
+        activity = classify_activity(
+            age=validated_ledger["age"],
+            fee=validated_ledger["base_fee_xrp"],
+            active=len(active_addrs),
+            new=len(new_addrs)
+        )
+        # --- Build message ---
+        message = f"🔋 *XRP Ledger Health:*\n\n"
+        message += f"🔹 *Ledger Info* \n"
+        message += f"- Ledger Index: {validated_ledger['seq']}\n"
+        message += f"- Ledger Age: {validated_ledger['age']} sec {activity['age']}\n"
+        message += f"- Transactions {txs}\n"
+        message += f"- Base Fee: {validated_ledger['base_fee_xrp']} {activity['fee']}\n\n"        
+        
+        message += f"🌐 *Network*\n"
+        #message += f"- TPS: {tps_est:.2f} → {activity['tps'][1]} *{activity['tps'][0]}*\n"
+        #message += f"- Active Addresses: {len(active_addrs)} → {activity['active'][1]} *{activity['active'][0]}*\n"
+        #message += f"- New Addresses: {len(new_addrs)} → {activity['new'][1]} *{activity['new'][0]}*\n"
+        message += f"- Validation Quorum: {info['validation_quorum']}\n"
+        message += f"- Rippled Version: {info['rippled_version']}\n\n"
+
+    except Exception as e:
+        logger.error(f"XRP health error: {e}")
 
     return message
+
     
 
 # --- Get the exchange by address ---
@@ -130,6 +207,7 @@ async def get_whale_txs(min_xrp=500_000, lookback_ledgers=100):
                 Ledger(ledger_index=idx, transactions=True, expand=True)
             )
             txs = resp.result.get("ledger", {}).get("transactions", [])
+            
             #print(f"Ledger {idx} fetched with {len(txs)} transactions")
             
         except Exception as e:
@@ -270,86 +348,3 @@ def format_whale_alert(tx, xrp_price=None):
 
     return msg
 
-# --- Obtain Escrow information ---
-
-RIPPLE_ESCROW_ACCOUNTS = [
-    "rMp7Vjb52z7xvef96dgE6FQVfcJp2tE2f2",
-    "rPVMhWBsfF9iMXYj3aAzJVkPDTFNSyWdKy",
-    "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh",
-    "rKVEGLiv4JgBDG3y62zXkWc6sYJ5kVh3z",
-    "rELeasERs3m4inA1UinRLTpXemqyStqzwh"
-    
-]
-escrow_db = TinyDB("escrow_data.json")
-
-def get_monthly_escrow_summary():
-    total_locked = 0
-    escrow_details = []
-
-    # Iterate over all known accounts
-    for account in RIPPLE_ESCROW_ACCOUNTS:
-        url = f"https://api.xrpscan.com/api/v1/account/{account}/escrows"
-        resp = requests.get(url)
-        if resp.status_code != 200:
-            continue
-        data = resp.json()
-
-        for e in data:
-            amount = int(e["Amount"]) / 1_000_000  # drops → XRP
-            total_locked += amount
-
-            # Convert FinishAfter (Ripple epoch) to datetime
-            finish_after = e.get("FinishAfter")
-            if finish_after:
-                finish_date = datetime.datetime(2000, 1, 1) + datetime.timedelta(seconds=int(finish_after))
-                finish_str = finish_date.strftime("%Y-%m-%d")
-            else:
-                finish_str = "N/A"
-
-            escrow_details.append({
-                "account": e["Account"],
-                "amount": amount,
-                "release_date": finish_str
-            })
-
-    # Determine current month
-    now = datetime.now(timezone.utc)
-    month_key = now.strftime("%Y-%m")
-
-    Entry = Query()
-    last_record = escrow_db.get(Entry.month == month_key)
-
-    if not last_record:
-        # First snapshot for the month
-        escrow_db.insert({
-            "month": month_key,
-            "total_locked": total_locked,
-            "released": 0,
-            "re_escrowed": 0
-        })
-        released = 0
-        re_escrowed = 0
-    else:
-        prev_total = last_record["total_locked"]
-        # Estimate released & re-escrowed
-        released = max(prev_total - total_locked, 0)
-        re_escrowed = max(total_locked - (prev_total - released), 0)
-        # Update record
-        escrow_db.update({
-            "total_locked": total_locked,
-            "released": released,
-            "re_escrowed": re_escrowed
-        }, Entry.month == month_key)
-
-    # Build summary message
-    message = f"📊 XRP Escrow Update ({month_key})\n\n"
-    message += f"🔒 Total Locked: {total_locked:,.0f} XRP\n"
-    message += f"📤 Released: {released:,.0f} XRP\n"
-    message += f"🔁 Re-escrowed: {re_escrowed:,.0f} XRP\n"
-    message += f"📈 Net Circulation Change: {released - re_escrowed:,.0f} XRP\n\n"
-
-    # Show top escrows (first 10 for brevity)
-    for e in escrow_details[:10]:
-        message += f"- {e['amount']:,.0f} XRP from {e['account']}, release: {e['release_date']}\n"
-
-    return message

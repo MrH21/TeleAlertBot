@@ -4,9 +4,7 @@ from core.cache import recent_whales_cache, MAX_WHALE_CACHE
 from ripple.wallets_data import wallets
 from tinydb import TinyDB, Query
 import asyncio
-import aiohttp
-from datetime import datetime, timezone
-import requests
+
 from xrpl.asyncio.clients import AsyncJsonRpcClient, AsyncWebsocketClient
 from xrpl.models.requests import Ledger, ServerInfo, AccountObjects
 
@@ -30,11 +28,11 @@ def classify_activity(age: int, fee: float, active: int, new: int):
     """
     # Ledger Age indicator
     if age <= 5:
-        age_label, age_emoji = ("✅", "OK")
+        age_label, age_emoji = "Low", "✅"
     elif age <= 10:
-        age_label, age_emoji = ("⚠️", "Medium")
+        age_label, age_emoji = "Medium", "⚠️"
     else:
-        age_label, age_emoji = ("❌", "High")
+        age_label, age_emoji = "High", "❌"
 
     # Base Fee indicator
     if fee <= 0.0001:

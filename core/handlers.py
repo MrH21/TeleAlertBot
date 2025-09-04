@@ -40,8 +40,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "subscriber": False
         })
         await update.message.reply_text(
-            "✨ Welcome to our *Crypto Alert Bot*! ✨\n\n"
-            "_You've been given a 7-day PREMIUM trial with up to 8 price alerts as well as XRP network date plus whale movement alert.\n\n"
+            "✨ Welcome to *Crypto Alert Bot*! ✨\n\n"
+            "_You've been given a 7-day PREMIUM trial with up to 8 price alerts as well as XRP network info and whale movement alert.\n\n"
             "After that, you'll be limited to 2 alert unless you /upgrade._\n\n"
             "*Proceed to /addalert now*",
             parse_mode="Markdown"

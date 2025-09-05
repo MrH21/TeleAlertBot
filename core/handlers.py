@@ -112,7 +112,7 @@ async def select_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
             support_str = [f"${lvl:.2f}" for lvl in support]
             resistance_str = [f"${lvl:.2f}" for lvl in resistance]
             await query.edit_message_text(f"🎯 Enter target price for *{context.user_data['ticker']}*\n\n"
-                                          f"Current price:  ${close:,.2f}\n"
+                                          f"🏷 Current price:  ${close:,.2f}\n"
                                           f"🔻 Resistance: {resistance_str}\n"
                                           f"🟢 Support: {support_str}", parse_mode='Markdown')
         else:

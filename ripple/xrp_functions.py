@@ -143,8 +143,8 @@ async def get_xrp_health(lookback_ledgers: int = 20):
         
         message += f"🌐 *Network*\n"
         #message += f"- TPS: {tps_est:.2f} → {activity['tps'][1]} *{activity['tps'][0]}*\n"
-        #message += f"- Active Addresses: {len(active_addrs)} → {activity['active'][1]} *{activity['active'][0]}*\n"
-        #message += f"- New Addresses: {len(new_addrs)} → {activity['new'][1]} *{activity['new'][0]}*\n"
+        message += f"- Active Addresses: {len(active_addrs)} → {activity['active'][1]} *{activity['active'][0]}*\n"
+        message += f"- New Addresses: {len(new_addrs)} → {activity['new'][1]} *{activity['new'][0]}*\n"
         message += f"- Validation Quorum: {info['validation_quorum']}\n"
         message += f"- Rippled Version: {info['rippled_version']}\n\n"
 

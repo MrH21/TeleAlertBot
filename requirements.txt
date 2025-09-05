@@ -4,6 +4,8 @@ uvicorn[standard]==0.22.0
 httpx
 aiohttp
 pandas
+numpy
+scikit-learn
 tinydb
 nest_asyncio
 apscheduler

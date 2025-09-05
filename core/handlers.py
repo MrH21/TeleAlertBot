@@ -2,7 +2,7 @@ from core.db import db, User_Query
 from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS
 from core.utilities import get_plan, fetch_current_price
 from core.cache import recent_whales_cache
-from ripple.xrp_functions import format_whale_alert, get_xrp_health
+from ripple.xrp_functions import format_whale_alert, get_xrp_health, get_key_levels
 from config import logger, ADMIN_ID
 import asyncio
 from telegram.ext import ContextTypes, ConversationHandler, CallbackContext
@@ -19,7 +19,7 @@ reply_markup_ticker = ReplyKeyboardMarkup(keyboard_ticker, one_time_keyboard=Tru
 async def help_command(update:Update, context:ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("*Here are the bot commands available:*\n\n/start - Getting started with this bot. \n/addalert - To set your crypto symbol and target for the alert."
                                     "\n/myalerts - To see what your current alerts are with option to delete."
-                                    "\n/ripple - To see recent XRP whale transactions and enable/disable whale alerts."
+                                    "\n/xrpnet - To see ledger info and health plus recent XRP whale transactions. Enable/disable whale alerts."
                                     "\n/upgrade - To upgrade your plan to premium for more alerts and features."
                                     "\n/help - See all commands available", parse_mode="Markdown")
     
@@ -96,6 +96,10 @@ async def addalert(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def select_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
+        user_id = update.effective_user.id
+        user = db.get(User_Query.user_id == user_id)
+        plan = await get_plan(user)
+        
         query = update.callback_query
         await query.answer()  # Acknowledge the callback query
         
@@ -103,7 +107,16 @@ async def select_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["ticker"] = ticker
         
         current_price = await fetch_current_price(context.user_data["ticker"])
-        await query.edit_message_text(f"🎯 Enter your target price for *{context.user_data['ticker']}* with current price of *{current_price:,.4f}*", parse_mode='Markdown')
+        if (context.user_data["ticker"] == "XRPUSDT") and (plan == "premium"):
+            close, support, resistance = get_key_levels()
+            support_str = [f"${lvl:.2f}" for lvl in support]
+            resistance_str = [f"${lvl:.2f}" for lvl in resistance]
+            await query.edit_message_text(f"🎯 Enter target price for *{context.user_data['ticker']}*\n\n"
+                                          f"Current price:  ${close:,.2f}\n"
+                                          f"🔻 Resistance: {resistance_str}\n"
+                                          f"🟢 Support: {support_str}", parse_mode='Markdown')
+        else:
+            await query.edit_message_text(f"🎯 Enter target price for *{context.user_data['ticker']}* with current price *{current_price:,.4f}*", parse_mode='Markdown')
         return SETTING_TARGET
     except Exception as e:
         logger.error(f"Error in select_ticker: {e}")
@@ -228,7 +241,7 @@ async def delete_alert_callback(update: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text("❌ Invalid alert index.")
         
 # --- Whale transaction watcher ---
-async def ripple(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def xrpnet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = db.get(User_Query.user_id == user_id)
     
@@ -239,7 +252,7 @@ async def ripple(update: Update, context: ContextTypes.DEFAULT_TYPE):
     plan = await get_plan(user)
     
     message = await get_xrp_health()  # Ensure connection to XRPL server
-    await update.message.reply_text(f"{message}", parse_mode="Markdown")
+    await update.message.reply_text(f"{message}", parse_mode="Markdown")  
         
     # Take the last 5 whale transactions
     preview = recent_whales_cache[-5:]
@@ -272,7 +285,7 @@ async def ripple(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:  # Free plan
         notice = "💡 You are currently on the *Free* plan. To get whale alerts /upgrade"
         await update.message.reply_text(notice, parse_mode="Markdown")
-        
+  
     
 # --- Whale button handler ----
 async def whale_button_handler(update: Update, context:CallbackContext):

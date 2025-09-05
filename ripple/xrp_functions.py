@@ -4,9 +4,14 @@ from core.cache import recent_whales_cache, MAX_WHALE_CACHE
 from ripple.wallets_data import wallets
 from tinydb import TinyDB, Query
 import asyncio
+import numpy as np
+import requests
+from sklearn.cluster import MiniBatchKMeans
+from xrpl.asyncio.clients import AsyncJsonRpcClient
+from xrpl.models.requests import Ledger, ServerInfo
 
-from xrpl.asyncio.clients import AsyncJsonRpcClient, AsyncWebsocketClient
-from xrpl.models.requests import Ledger, ServerInfo, AccountObjects
+# --- Binance url ---
+BINANCE_URL = "https://api.binance.com/api/v3/klines"
 
 # --- Set up wallet database ---
 wdb = TinyDB("exchange_wallets.json")
@@ -148,7 +153,55 @@ async def get_xrp_health(lookback_ledgers: int = 20):
 
     return message
 
+# --- Getting the support and resistance levels ---
+def get_candles(symbol="XRPUSDT", interval="1d", limit=500):
+    url = f"{BINANCE_URL}?symbol={symbol}&interval={interval}&limit={limit}"
+    data = requests.get(url).json()
+    if not isinstance(data, list):
+        raise ValueError(f"Unexpected API Response: {data}")
+    # each kline
+    candles = []
+    for c in data:
+        try:
+            high = float(c[2])
+            low = float(c[3])
+            close = float(c[4])
+            volume = float(c[5])
+            
+            candles.append((high,low,close,volume))
+        except ValueError:
+            continue
+    return candles
+
+def get_key_levels(symbol="XRPUSDT", interval="1d", clusters=6):
+    candles = get_candles(symbol,interval)
+    latest_close = candles[-1][2]  # last candle's close price
     
+    prices = []
+    weights = []
+    VOLUME_SCALE = 50_000_000
+    
+    for h, l, c, v in candles:
+        prices.extend([h, l])
+        weight = np.log1p(v / VOLUME_SCALE)
+        weights.extend([weight, weight]) # weighting for h and l by volume
+        
+    prices = np.array(prices).reshape(-1,1)
+    weights = np.array(weights)
+    
+    # run MiniBatchKMeans
+    kmeans = MiniBatchKMeans(n_clusters=clusters, random_state=0, n_init=10,batch_size=256)
+    kmeans.fit(prices,sample_weight=weights)
+    
+    levels = sorted(kmeans.cluster_centers_.flatten())
+    levels = [round(l, 4) for l in levels]
+    
+    # Split into support/resistance based on latest close
+    support = [lvl for lvl in levels if lvl < latest_close]
+    resistance = [lvl for lvl in levels if lvl > latest_close]
+
+    return latest_close, support, resistance
+
 
 # --- Get the exchange by address ---
 def get_exchange_by_address(address):

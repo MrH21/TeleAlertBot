@@ -25,6 +25,10 @@ if len(wallets_table) == 0:
 last_ledger_index = None
 client = AsyncJsonRpcClient("https://s2.ripple.com:51234/")
 
+# --- ML Parameters --- 
+INTVL = "1d"
+ML_lookback = 500
+
 # --- Classify Network Activity ---
 def classify_activity(age: int, fee: float, active: int, new: int):
     """
@@ -94,7 +98,7 @@ async def get_xrp_health(lookback_ledgers: int = 20):
         tx_total = 0
         active_addrs, new_addrs = set(), set()
         
-        '''
+        
         # --- Loop over recent ledgers ---
         for idx in range(latest_index - lookback_ledgers + 1, latest_index + 1):
             ledger_resp = await client.request(Ledger(ledger_index=idx, transactions=True, expand=True))
@@ -125,7 +129,7 @@ async def get_xrp_health(lookback_ledgers: int = 20):
             tps=tps_est,
             active=len(active_addrs),
             new=len(new_addrs)
-        )'''
+        )
         
         activity = classify_activity(
             age=validated_ledger["age"],
@@ -154,7 +158,7 @@ async def get_xrp_health(lookback_ledgers: int = 20):
     return message
 
 # --- Getting the support and resistance levels ---
-def get_candles(symbol="XRPUSDT", interval="1d", limit=500):
+def get_candles(symbol="XRPUSDT", interval=INTVL, limit=ML_lookback):
     url = f"{BINANCE_URL}?symbol={symbol}&interval={interval}&limit={limit}"
     data = requests.get(url).json()
     if not isinstance(data, list):
@@ -173,7 +177,7 @@ def get_candles(symbol="XRPUSDT", interval="1d", limit=500):
             continue
     return candles
 
-def get_key_levels(symbol="XRPUSDT", interval="1d", clusters=6):
+def get_key_levels(symbol="XRPUSDT", interval=INTVL, clusters=6):
     candles = get_candles(symbol,interval)
     latest_close = candles[-1][2]  # last candle's close price
     
@@ -331,7 +335,7 @@ async def get_whale_txs(min_xrp=500_000, lookback_ledgers=100):
                                 "type": "OfferExecute"
                             })
 
-        await asyncio.sleep(0.3)  # polite rate limit
+        await asyncio.sleep(0.2)  # polite rate limit
 
     # Update whale cache
     if whales:

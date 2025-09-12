@@ -50,36 +50,11 @@ def classify_activity(age: int, fee: float):
         fee_label, fee_emoji = "Medium", "⚠️"
     else:
         fee_label, fee_emoji = "High", "❌"
-    # TPS
-    '''if tps > 20:
-        tps_label, tps_emoji = "High", "🚀"
-    elif tps > 5:
-        tps_label, tps_emoji = "Medium", "⚡"
-    else:
-        tps_label, tps_emoji = "Low", "💤"
 
-    # Active addresses
-    if active > 2000:
-        active_label, active_emoji = "High", "🌋"
-    elif active > 500:
-        active_label, active_emoji = "Medium", "🔥"
-    else:
-        active_label, active_emoji = "Low", "🌱"
-
-    # New addresses
-    if new > 200:
-        new_label, new_emoji = "High", "✨"
-    elif new > 50:
-        new_label, new_emoji = "Medium", "🌟"
-    else:
-        new_label, new_emoji = "Low", "🔹"'''
 
     return {
         "age": (age_label, age_emoji),
         "fee": (fee_label, fee_emoji),
-        #"tps": (tps_label, tps_emoji),
-        #"active": (active_label, active_emoji),
-        #"new": (new_label, new_emoji),
     }
 
 # --- Extract XRP health from server info ---
@@ -94,43 +69,13 @@ async def get_xrp_health(lookback_ledgers: int = 20):
         latest_index = validated_ledger["seq"]
         ledger_resp = await client.request(Ledger(ledger_index=latest_index, transactions=True, expand=True))
         txs = len(ledger_resp.result.get("ledger", {}).get("transactions", []))
-        # --- Initialize counters ---
-        #tx_total = 0
-        #active_addrs, new_addrs = set(), set()
-        
-        '''
-        # --- Loop over recent ledgers ---
-        for idx in range(latest_index - lookback_ledgers + 1, latest_index + 1):
-            ledger_resp = await client.request(Ledger(ledger_index=idx, transactions=True, expand=True))
-            txs = ledger_resp.result.get("ledger", {}).get("transactions", [])
-            tx_total += len(txs)
 
-            for tx in txs:
-                tx_json = tx.get("tx_json", {})
-                if "Account" in tx_json:
-                    active_addrs.add(tx_json["Account"])
-                if tx_json.get("TransactionType") == "Payment" and "Destination" in tx_json:
-                    active_addrs.add(tx_json["Destination"])
-
-                for node in tx.get("meta", {}).get("AffectedNodes", []):
-                    created = node.get("CreatedNode")
-                    if created and created.get("LedgerEntryType") == "AccountRoot":
-                        new_addrs.add(created["NewFields"]["Account"])
-
-            await asyncio.sleep(0.1)  # throttle to avoid overloading node
-            
-
-        # --- TPS estimate ---
-        tps_est = tx_total / (lookback_ledgers * 4)  # approx 4s per ledger
-        '''
 
         # --- Classify activity levels ---
         activity = classify_activity(
             age=validated_ledger["age"],
             fee=validated_ledger["base_fee_xrp"]
-            #tps=tps_est,
-            #active=len(active_addrs),
-            #new=len(new_addrs)
+
         )
 
         # --- Build message ---
@@ -142,9 +87,6 @@ async def get_xrp_health(lookback_ledgers: int = 20):
         message += f"- Base Fee: {validated_ledger['base_fee_xrp']} {activity['fee']}\n\n"        
         
         message += f"🌐 *Network*\n"
-        #message += f"- TPS: {tps_est:.2f} → {activity['tps'][1]} *{activity['tps'][0]}*\n"
-        #message += f"- Active Addresses: {len(active_addrs)} → {activity['active'][1]} *{activity['active'][0]}*\n"
-        #message += f"- New Addresses: {len(new_addrs)} → {activity['new'][1]} *{activity['new'][0]}*\n"
         message += f"- Validation Quorum: {info['validation_quorum']}\n"
         message += f"- Rippled Version: {info['rippled_version']}\n\n"
 

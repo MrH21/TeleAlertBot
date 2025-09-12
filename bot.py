@@ -1,7 +1,8 @@
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, CallbackQueryHandler
-from core.handlers import start, addalert, select_ticker, select_target, select_direction, myalerts, delete_alert_callback, xrpnet, whale_button_handler, upgrade, help_command, stats, broadcast
+from core.handlers import start, addalert, select_ticker, select_target, select_direction, myalerts, delete_alert_callback 
+from core.handlers import xrpnet, set_params, params_button_handler, whale_button_handler, upgrade, help_command, stats, broadcast
 from config import BOT_TOKEN
-from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION
+from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, SET_PARAMS
 import warnings
 from telegram.warnings import PTBUserWarning
 
@@ -17,6 +18,7 @@ def create_application():
     app = Application.builder().token(BOT_TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
+    
     # Conversation handler for /addalert
     addalert_conv = ConversationHandler(
         entry_points=[CommandHandler("addalert", addalert)],
@@ -28,10 +30,12 @@ def create_application():
         per_message=False,
         fallbacks=[],
     )
-    app.add_handler(addalert_conv)
+    app.add_handler(addalert_conv)   
     app.add_handler(CommandHandler("myalerts", myalerts))
     app.add_handler(CallbackQueryHandler(delete_alert_callback, pattern=r"^delete_\d+$"))
-    app.add_handler(CommandHandler("xrpnet", xrpnet))
+    app.add_handler(CommandHandler("xrpnet", xrpnet))    
+    app.add_handler(CommandHandler("xrpset", set_params))
+    app.add_handler(CallbackQueryHandler(params_button_handler))
     app.add_handler(CallbackQueryHandler(whale_button_handler))
     app.add_handler(CommandHandler("upgrade", upgrade))
     app.add_handler(CommandHandler("stats", stats))

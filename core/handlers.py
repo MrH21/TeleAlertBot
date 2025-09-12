@@ -1,5 +1,5 @@
 from core.db import db, User_Query
-from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS
+from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS, SET_PARAMS
 from core.utilities import get_plan, fetch_current_price
 from core.cache import recent_whales_cache
 from ripple.xrp_functions import format_whale_alert, get_xrp_health, get_key_levels
@@ -36,13 +36,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "trial_expiry": trial_end,
             "alerts": [],
             "watch": "XRPUSDT",
+            "ml_timeline": "1d",
             "watch_status": True,
             "subscriber": False
         })
         await update.message.reply_text(
             "✨ Welcome to *Crypto Alert Bot*! ✨\n\n"
-            "_You've been given a 7-day PREMIUM trial with up to 8 price alerts as well as XRP network info and whale movement alert.\n\n"
-            "After that, you'll be limited to 2 alert unless you /upgrade._\n\n"
+            "You've been given a 7-day PREMIUM trial with up to 8 price alerts as well as XRP network info and whale movement alert.\n\n"
+            "After that, you'll be limited to 2 alert unless you /upgrade.\n\n"
             "*Proceed to /addalert now*",
             parse_mode="Markdown"
         )
@@ -94,11 +95,14 @@ async def addalert(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("📊 Select the ticker:", reply_markup=reply_markup)
     return SELECTING_TICKER
 
+# --- Setting the symbol for add alert ---
 async def select_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user_id = update.effective_user.id
         user = db.get(User_Query.user_id == user_id)
         plan = await get_plan(user)
+        
+        ml_intv = user.get("ml_timeline")
         
         query = update.callback_query
         await query.answer()  # Acknowledge the callback query
@@ -106,13 +110,14 @@ async def select_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ticker = query.data.replace("ticker_", "")
         context.user_data["ticker"] = ticker
         
-        current_price = await fetch_current_price(context.user_data["ticker"])
+        current_price = await fetch_current_price(ticker)
         if (context.user_data["ticker"] == "XRPUSDT") and (plan == "premium"):
-            close, support, resistance = get_key_levels()
+            close, support, resistance = get_key_levels(interval=ml_intv)
             support_str = [f"${lvl:.2f}" for lvl in support]
             resistance_str = [f"${lvl:.2f}" for lvl in resistance]
             await query.edit_message_text(f"🎯 Enter target price for *{context.user_data['ticker']}*\n\n"
                                           f"🏷 Current price:  ${close:,.2f}\n"
+                                          f"⏰ Caculated on timeline of {ml_intv}\n"
                                           f"🔻 Resistance: {resistance_str}\n"
                                           f"🟢 Support: {support_str}", parse_mode='Markdown')
         else:
@@ -122,7 +127,8 @@ async def select_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in select_ticker: {e}")
         await update.message.reply_text("❌ An error occurred. Please try again.")
         return ConversationHandler.END
-    
+
+# --- Choose the target price for alert ---    
 async def select_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         context.user_data["target"] = float(update.message.text.strip())
@@ -140,6 +146,7 @@ async def select_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     , parse_mode='Markdown',reply_markup=reply_markup_direction)
     return SELECTING_DIRECTION
 
+# --- Set the direction of price movement ---
 async def select_direction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer() # Acknowledge the callback query
@@ -305,6 +312,67 @@ async def whale_button_handler(update: Update, context:CallbackContext):
     elif query.data == "whale_off":
         db.update({"watch_status": False}, User_Query.user_id == user_id)
         await query.edit_message_text("❌ Whale alerts disabled.")
+        
+# --- Set the Machine Learning parameters ---
+async def set_params(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user = db.get(User_Query.user_id == user_id)
+
+    if not user:
+        await update.message.reply_text("❌ Please use /start first.")
+        return
+
+    plan = await get_plan(user)
+    
+    keyboard_ticker = [
+        [InlineKeyboardButton('⏰ Interval ~ 30min', callback_data="timeline_30m")],
+        [InlineKeyboardButton('⏰ Interval ~ 1hr', callback_data="timeline_1h")],
+        [InlineKeyboardButton('⏰ Interval ~ 4hr', callback_data="timeline_4h")],
+        [InlineKeyboardButton('⏰ Interval ~ 6hr', callback_data="timeline_6h")],
+        [InlineKeyboardButton('⏰ Interval ~ 1day', callback_data="timeline_1d")]
+    ]     
+    reply_markup = InlineKeyboardMarkup(keyboard_ticker)
+    
+    if plan == "free":
+        await update.message.reply_text(f"❌ This is a Premium feature. You will need to /updgrade to use.", parse_mode="Markdown")
+    
+    if plan == "premium":
+        await update.message.reply_text(f"🛠 *Machine Learning* 🛠 \n\n"
+                "This bot uses Machine Learning to calculate support and resistance levels on daily timeframe. You can adjust timeline to one of following: ", reply_markup=reply_markup)
+
+    
+# --- ML Timeline button handler ---
+async def params_button_handler(update: Update, context:CallbackContext):
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    user = db.get(User_Query.user_id == user_id)
+
+    if not user:
+        await update.message.reply_text("❌ Please use /start first.")
+        return
+    
+    clock = query.data.replace("timeline_", "")
+    context.user_data["ml_timeline"] = clock
+    
+    if clock == "30m":
+        db.update({"ml_timeline": "30m"}, User_Query.user_id == user_id)
+        await query.edit_message_text(f"✅ Timeline set to *{clock}*",parse_mode="Markdown")
+    elif clock == "1h":
+        db.update({"ml_timeline": "1h"}, User_Query.user_id == user_id)
+        await query.edit_message_text(f"✅ Timeline set to *{clock}*",parse_mode="Markdown")
+    elif clock == "4h":
+        db.update({"ml_timeline": "4h"}, User_Query.user_id == user_id)
+        await query.edit_message_text(f"✅ Timeline set to *{clock}*",parse_mode="Markdown")
+    elif clock == "6h":
+        db.update({"ml_timeline": "4h"}, User_Query.user_id == user_id)
+        await query.edit_message_text(f"✅ Timeline set to *{clock}*",parse_mode="Markdown")
+    elif clock == "1d":
+        db.update({"ml_timeline": "1d"}, User_Query.user_id == user_id)
+        await query.edit_message_text(f"✅ Timeline set to *{clock}*",parse_mode="Markdown")
+    
+      
         
 # --- Upgrade plan ---
 async def upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -42,8 +42,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         })
         await update.message.reply_text(
             "✨ Welcome to *Crypto Alert Bot*! ✨\n\n"
-            "You've been given a 7-day PREMIUM trial with up to 8 price alerts as well as XRP network info and whale movement alert.\n\n"
-            "After that, you'll be limited to 2 alert unless you /upgrade.\n\n"
+            "You've been given a 7-day PREMIUM trial with up to 8 price alerts. As well as a focus on XRP: Current Ripple ledger info, support and resistance levels calculated "
+            "using Machine Learning and whale movement alerts.\n\n"
+            "After that, you'll be limited to 2 price alerts unless you /upgrade.\n\n"
             "*Proceed to /addalert now*",
             parse_mode="Markdown"
         )
@@ -338,7 +339,7 @@ async def set_params(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if plan == "premium":
         await update.message.reply_text(f"🛠 *Machine Learning* 🛠 \n\n"
-                "This bot uses Machine Learning to calculate support and resistance levels on daily timeframe. You can adjust timeline to one of following: ", reply_markup=reply_markup)
+        "This bot uses Machine Learning to calculate support and resistance levels on daily timeframe. You can adjust timeframe to one of following: ", reply_markup=reply_markup, parse_mode="Markdown")
 
     
 # --- ML Timeline button handler ---
@@ -358,19 +359,19 @@ async def params_button_handler(update: Update, context:CallbackContext):
     
     if clock == "30m":
         db.update({"ml_timeline": "30m"}, User_Query.user_id == user_id)
-        await query.edit_message_text(f"✅ Timeline set to *{clock}*",parse_mode="Markdown")
+        await query.edit_message_text(f"✅ Timeframe set to *{clock}*",parse_mode="Markdown")
     elif clock == "1h":
         db.update({"ml_timeline": "1h"}, User_Query.user_id == user_id)
-        await query.edit_message_text(f"✅ Timeline set to *{clock}*",parse_mode="Markdown")
+        await query.edit_message_text(f"✅ Timeframe set to *{clock}*",parse_mode="Markdown")
     elif clock == "4h":
         db.update({"ml_timeline": "4h"}, User_Query.user_id == user_id)
-        await query.edit_message_text(f"✅ Timeline set to *{clock}*",parse_mode="Markdown")
+        await query.edit_message_text(f"✅ Timeframe set to *{clock}*",parse_mode="Markdown")
     elif clock == "6h":
         db.update({"ml_timeline": "4h"}, User_Query.user_id == user_id)
-        await query.edit_message_text(f"✅ Timeline set to *{clock}*",parse_mode="Markdown")
+        await query.edit_message_text(f"✅ Timeframe set to *{clock}*",parse_mode="Markdown")
     elif clock == "1d":
         db.update({"ml_timeline": "1d"}, User_Query.user_id == user_id)
-        await query.edit_message_text(f"✅ Timeline set to *{clock}*",parse_mode="Markdown")
+        await query.edit_message_text(f"✅ Timeframe set to *{clock}*",parse_mode="Markdown")
     
       
         

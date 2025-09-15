@@ -102,9 +102,8 @@ async def select_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user_id = update.effective_user.id
         user = db.get(User_Query.user_id == user_id)
-        plan = await get_plan(user)
-        
         ml_intv = user.get("ml_timeline","1d")
+        plan = await get_plan(user)
         
         query = update.callback_query
         await query.answer()  # Acknowledge the callback query
@@ -114,7 +113,7 @@ async def select_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         current_price = await fetch_current_price(ticker)
         if (context.user_data["ticker"] == "XRPUSDT") and (plan == "premium"):
-            close, support, resistance = get_key_levels(ml_intv)
+            close, support, resistance = get_key_levels(interval=ml_intv)
             support_str = [f"${lvl:.2f}" for lvl in support]
             resistance_str = [f"${lvl:.2f}" for lvl in resistance]
             await query.edit_message_text(f"🎯 Enter target price for *{context.user_data['ticker']}*\n\n"

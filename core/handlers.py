@@ -357,21 +357,8 @@ async def params_button_handler(update: Update, context:CallbackContext):
     clock = query.data.replace("timeline_", "")
     context.user_data["ml_timeline"] = clock
     
-    if clock == "30m":
-        db.update({"ml_timeline": "30m"}, User_Query.user_id == user_id)
-        await query.edit_message_text(f"✅ Timeframe set to *{clock}*",parse_mode="Markdown")
-    elif clock == "1h":
-        db.update({"ml_timeline": "1h"}, User_Query.user_id == user_id)
-        await query.edit_message_text(f"✅ Timeframe set to *{clock}*",parse_mode="Markdown")
-    elif clock == "4h":
-        db.update({"ml_timeline": "4h"}, User_Query.user_id == user_id)
-        await query.edit_message_text(f"✅ Timeframe set to *{clock}*",parse_mode="Markdown")
-    elif clock == "6h":
-        db.update({"ml_timeline": "4h"}, User_Query.user_id == user_id)
-        await query.edit_message_text(f"✅ Timeframe set to *{clock}*",parse_mode="Markdown")
-    elif clock == "1d":
-        db.update({"ml_timeline": "1d"}, User_Query.user_id == user_id)
-        await query.edit_message_text(f"✅ Timeframe set to *{clock}*",parse_mode="Markdown")
+    db.update(set("ml_timeline", clock), User_Query.user_id == user_id)
+    await query.edit_message_text(f"✅ Timeframe set to *{clock}*", parse_mode="Markdown")
     
       
         

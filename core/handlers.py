@@ -10,6 +10,7 @@ from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKe
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 import pytz
+from tinydb.operations import set
 
 # Keyboard Ticker Options
 keyboard_ticker = [['BTCUSDT', 'ETHUSDT'], ['XRPUSDT', 'SOLUSDT'], ['LINKUSDT','DOTUSDT'], ['ADAUSDT','BNBUSDT'], ['SUIUSDT','LTCUSDT']]
@@ -91,7 +92,7 @@ async def addalert(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton('SUIUSDT', callback_data="ticker_SUIUSDT")],
         [InlineKeyboardButton('LTCUSDT', callback_data="ticker_LTCUSDT")]
     ]
-     
+    print(db.get(User_Query.user_id == user_id))
     reply_markup = InlineKeyboardMarkup(keyboard_ticker)
     await update.message.reply_text("📊 Select the ticker:", reply_markup=reply_markup)
     return SELECTING_TICKER

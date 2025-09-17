@@ -15,5 +15,4 @@ myID = os.environ.get("ADMIN_ID")
 
 db.update({'plan': 'premium',
            'trial_expiry': '2030-09-22T13:36:34.561237+00:00',
-           'subscriber': True,
-           }, User_Query.user_id == myID)
+           'subscriber': True}, User_Query.user_id == myID)

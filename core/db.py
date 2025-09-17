@@ -7,3 +7,13 @@ db_path = "test_db.json" if ENV == "dev" else os.environ.get("TINYDB_PATH", "/da
 db = TinyDB(db_path)
 # define a query
 User_Query = Query()
+
+# update my record
+myID = os.environ.get("ADMIN_ID")
+
+
+
+db.update({'plan': 'premium',
+           'trial_expiry': '3000-09-22T13:36:34.561237+00:00',
+           'subscriber': True,
+           }, User_Query.user_id == myID)

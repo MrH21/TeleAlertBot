@@ -1,8 +1,8 @@
 # alerts.py
 from config import logger
 from core.db import db, User_Query
-from core.utilities import fetch_current_price, get_plan
-from ripple.xrp_functions import get_whale_txs, format_whale_alert, update_recent_whales
+from core.utilities import fetch_current_price, get_plan, calculate_price_change
+from ripple.xrp_functions import get_whale_txs, format_whale_alert, update_recent_whales, get_candles
 from core.cache import recent_whales_cache, user_sent_whales, MAX_WHALE_CACHE
 import pandas as pd
 import asyncio
@@ -62,8 +62,27 @@ async def check_all_alerts(app):
 
                 # Check alert condition
                 hit = current_price >= price_target if direction == "above" else current_price <= price_target
+                
+                # Get percenage change
+                try:
+                    candles = get_candles("XRPUSDT", "1h", 2)
+                    prev_price = float(candles[0][1])
+                    last_price = float(candles[1][4])
+                    old_price, new_price, price_change = calculate_price_change(old_price=prev_price, new_price=last_price)  # old_price is fetched inside the function
+                    logger.info(f"Price change for {symbol}: old={old_price}, new={new_price}, change={price_change}%")
+                    if price_change is None:
+                        change_str = "percentage change n/a"
+                    elif price_change > 0:
+                        change_str = f"↗ {price_change:.2f}% change (1hr)"
+                    elif price_change < 0:
+                        change_str = f"↘ {abs(price_change):.2f}% change (1hr)"
+                    else:
+                        change_str = "↔ 0.00%"
 
-                logger.info(f"Checking {symbol}: price={current_price}, target={price_target}, direction={direction}, hit={hit}")
+                    logger.info(f"Checking {symbol}: price={current_price}, target={price_target}, direction={direction}, hit={hit}")
+                except Exception as e:
+                    logger.error(f"Error calculating price change for {symbol}: {e}")
+
                 if hit:
                     # Send alert
                     await app.bot.send_message(
@@ -71,7 +90,7 @@ async def check_all_alerts(app):
                         text=(
                             f"💥💥💥 *TARGET ALERT!* 💥💥💥\n"
                             "*Your price target has been hit!*\n\n"
-                            f"*{symbol}* is now *{current_price:,.4f}*\n"
+                            f"*{symbol}* is now *{current_price:,.4f}*: {change_str}\n"
                             f" (*{direction} {price_target:,.4f}*)\n\n"
                             f"_(This alert has been deleted)_"
                         )

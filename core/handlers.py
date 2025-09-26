@@ -21,6 +21,7 @@ async def help_command(update:Update, context:ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("*Here are the bot commands available:*\n\n/start - Getting started with this bot. \n/addalert - To set your crypto symbol and target for the alert."
                                     "\n/myalerts - To see what your current alerts are with option to delete."
                                     "\n/xrpnet - To see ledger info and health plus recent XRP whale transactions. Enable/disable whale alerts."
+                                    "\n/xrpset - To set Machine Learning parameters for support and resistance levels on XRP."
                                     "\n/upgrade - To upgrade your plan to premium for more alerts and features."
                                     "\n/help - See all commands available", parse_mode="Markdown")
     
@@ -114,10 +115,10 @@ async def select_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
         current_price = await fetch_current_price(ticker)
         if (context.user_data["ticker"] == "XRPUSDT") and (plan == "premium"):
             close, support, resistance = get_key_levels(interval=ml_intv)
-            support_str = [f"${lvl:.2f}" for lvl in support]
-            resistance_str = [f"${lvl:.2f}" for lvl in resistance]
+            support_str = [f"${lvl:.4f}" for lvl in support]
+            resistance_str = [f"${lvl:.4f}" for lvl in resistance]
             await query.edit_message_text(f"🎯 Enter target price for *{context.user_data['ticker']}*\n\n"
-                                          f"🏷 Current price:  ${close:,.2f}\n"
+                                          f"🏷 Current price:  ${close:,.4f}\n"
                                           f"⏰ Caculated on timeline of {ml_intv}\n"
                                           f"🔻 Resistance: {resistance_str}\n"
                                           f"🟢 Support: {support_str}", parse_mode='Markdown')

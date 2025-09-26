@@ -3,6 +3,7 @@ import pandas as pd
 from config import logger
 import aiohttp
 from core.db import db, User_Query
+from ripple.xrp_functions import get_candles
 from datetime import datetime, timezone
 
 
@@ -37,5 +38,21 @@ async def fetch_current_price(symbol="XRPUSDT"):
     except Exception as e:
         logger.error(f"Error with fetching the live price: {e}")
         return None
+    
+    
+# --- Calculate price change percentage ---
+def calculate_price_change(old_price=None, new_price=None):
+    try:
+        if old_price == 0:
+            raise ValueError("Old price cannot be zero.")
+        change = ((new_price - old_price) / old_price) * 100
+        per_change = round(change, 2)
+        return old_price, new_price, per_change
+    except Exception as e:
+        logger.error(f"Error calculating price change: {e}")
+        return None, None, None
+    
+# --- Fetch and handle support and resistance levels ---
+
     
 

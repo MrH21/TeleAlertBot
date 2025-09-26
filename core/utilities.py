@@ -25,11 +25,11 @@ async def get_plan(user):
 # --- Fetch the current price of the ticker and save as float ---
 async def fetch_current_price(symbol="XRPUSDT"):
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
-    response = requests.get(url)
+    
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
-                data = response.json()
+                data = await resp.json()
                 if 'price' in data:
                     return float(data['price'])
                 else:
@@ -41,16 +41,14 @@ async def fetch_current_price(symbol="XRPUSDT"):
     
     
 # --- Calculate price change percentage ---
-def calculate_price_change(old_price=None, new_price=None):
+def calculate_price_change(old_price, new_price):
     try:
         if old_price == 0:
             raise ValueError("Old price cannot be zero.")
-        change = ((new_price - old_price) / old_price) * 100
-        per_change = round(change, 2)
-        return old_price, new_price, per_change
+        return round(((new_price - old_price) / old_price) * 100, 2)
     except Exception as e:
         logger.error(f"Error calculating price change: {e}")
-        return None, None, None
+        return None
     
 # --- Fetch and handle support and resistance levels ---
 

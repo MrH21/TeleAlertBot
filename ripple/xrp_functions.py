@@ -105,12 +105,13 @@ def get_candles(symbol="XRPUSDT", interval=INTVL, limit=ML_lookback):
     candles = []
     for c in data:
         try:
+            open = float(c[1])
             high = float(c[2])
             low = float(c[3])
             close = float(c[4])
             volume = float(c[5])
             
-            candles.append((high,low,close,volume))
+            candles.append((open, high,low,close,volume))
         except ValueError:
             continue
     return candles

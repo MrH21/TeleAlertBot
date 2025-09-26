@@ -119,9 +119,10 @@ async def select_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
             resistance_str = [f"${lvl:.4f}" for lvl in resistance]
             await query.edit_message_text(f"🎯 Enter target price for *{context.user_data['ticker']}*\n\n"
                                           f"🏷 Current price:  ${close:,.4f}\n"
-                                          f"⏰ Caculated on timeline of {ml_intv}\n"
+                                          f"*Machine Learning Levels:*\n"
                                           f"🔻 Resistance: {resistance_str}\n"
-                                          f"🟢 Support: {support_str}", parse_mode='Markdown')
+                                          f"🟢 Support: {support_str}\n\n"
+                                          f"_(Caculated on timeline of {ml_intv})_", parse_mode='Markdown')
         else:
             await query.edit_message_text(f"🎯 Enter target price for *{context.user_data['ticker']}* with current price *{current_price:,.4f}*", parse_mode='Markdown')
         return SETTING_TARGET

@@ -66,10 +66,15 @@ async def check_all_alerts(app):
                 # Get percenage change
                 try:
                     candles = get_candles("XRPUSDT", "1h", 2)
-                    prev_price = float(candles[0][1])
-                    last_price = float(candles[1][4])
-                    old_price, new_price, price_change = calculate_price_change(old_price=prev_price, new_price=last_price)  # old_price is fetched inside the function
-                    logger.info(f"Price change for {symbol}: old={old_price}, new={new_price}, change={price_change}%")
+
+                    if len(candles) < 2:
+                        raise ValueError(f"Not enough candles returned for XRPUSDT: {candles}")
+
+                    prev_price = float(candles[0][0])
+                    last_price = float(candles[1][3])
+
+                    price_change = calculate_price_change(prev_price, last_price)  # old_price is fetched inside the function
+                    logger.info(f"Price change for {symbol}: old={prev_price}, new={last_price}, change={price_change}%")
                     if price_change is None:
                         change_str = "percentage change n/a"
                     elif price_change > 0:
@@ -90,8 +95,9 @@ async def check_all_alerts(app):
                         text=(
                             f"💥💥💥 *TARGET ALERT!* 💥💥💥\n"
                             "*Your price target has been hit!*\n\n"
-                            f"*{symbol}* is now *{current_price:,.4f}*: {change_str}\n"
-                            f" (*{direction} {price_target:,.4f}*)\n\n"
+                            f"*{symbol}* is now *{current_price:,.4f}*, \n"                            
+                            f" (*{direction} {price_target:,.4f}*)\n"
+                            f"{change_str}\n\n"
                             f"_(This alert has been deleted)_"
                         )
                         ,parse_mode='Markdown'

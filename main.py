@@ -12,44 +12,49 @@ application = create_application()
 app = FastAPI()
 
 # Retrieve the secret key from environment variables
-SIGNING_SECRET = os.getenv("LS_WEBHOOK_SECRET")
+SIGNING_SECRET = os.getenv("WC_WEBHOOK_SECRET")
 if not SIGNING_SECRET:
-    raise ValueError("LS_WEBHOOK_SECRET environment variable not set")
+    raise ValueError("WC_WEBHOOK_SECRET environment variable not set")
 
-@app.post("/lemonsqueezy/webhook")
-async def lemon_webhook(request: Request):
+@app.post("/woocommerce/webhook")
+async def woo_webhook(request: Request):
+    # Optional secret validation
+    secret = request.query_params.get("secret")
+    if secret != SIGNING_SECRET:
+        return {"ok": False, "error": "Invalid secret"}
+
     payload = await request.json()
-    print("Webhook payload:", payload)  # For testing
-    
-    event = payload.get("event")
-    telegram_id = payload.get('data', {}).get('attributes', {}).get('custom', {}).get('telegram_id') \
-              or payload.get('meta', {}).get('telegram_id')
-              
-    if not telegram_id:
-        logger.error("Telegram ID not found in webhook payload.")
-        return {"ok": False, "error": "Telegram ID not found"}
-    
-    telegram_id = int(telegram_id)  # ensure same type as in DB
-    User = User_Query()
-       
-    data_attrs = payload.get("data", {}).get("attributes", {})
-    plan_version = f"{data_attrs.get('product_name')} - {data_attrs.get('variant_name')}" 
-    billing_url = f"https://lupox.lemonsqueezy.com/billing?telegram_id={telegram_id}"
-    
-    if not telegram_id:
-        logger.error("Telegram ID not found in webhook payload.")
-        return {"ok": False, "error": "Telegram ID not found"}
-    
-    User = User_Query()
-    telegram_id = int(telegram_id)  # ensure same type as in DB
-    if event in ["subscription_created", "subscription_updated", "subscription_renewed", "subscription_resumed"]:
-        db.update({"plan": "premium", "subscriber": True}, User.telegram_id == telegram_id)
-        # Optional: send Telegram confirmation
-        await app.send_message(chat_id=telegram_id, text=f"📢 Subscription Active ✅ Plan: {plan_version}")
-    elif event in ["subscription_cancelled", "subscription_expired", "payment_failed"]:
-        db.update({"plan":"free", "subscriber": False}, User.telegram_id == telegram_id)
-        await app.send_message(chat_id=telegram_id, text=f"📢 Subscription Inactive ❌\nManage your subscription here: <a href=\"{billing_url}\"><b>Manage Subscription</b></a>")
+    print("WooCommerce Webhook payload:", payload)  # Debugging
 
+    # Retrieve Telegram ID (must be included in WooCommerce subscription metadata)
+    telegram_id = payload.get('meta', {}).get('telegram_id')
+    if not telegram_id:
+        logger.error("Telegram ID not found in webhook payload.")
+        return {"ok": False, "error": "Telegram ID not found"}
+    
+    telegram_id = int(telegram_id)
+    User = User_Query()  # Your DB query class
+
+    # Extract plan details
+    line_items = payload.get('line_items', [])
+    plan_name = line_items[0].get('name') if line_items else "Unknown Plan"
+    billing_url = f"https://lupocreative.online/my-account/subscriptions/{payload.get('id')}"
+
+    # Map WooCommerce subscription status to your program logic
+    status = payload.get('status')
+    if status in ["active", "on-hold", "pending"]:  # Treat 'on-hold' as active if you want
+        db.update({"plan": "premium", "subscriber": True}, User.telegram_id == telegram_id)
+        await app.send_message(
+            chat_id=telegram_id,
+            text=f"📢 Subscription Active ✅ Plan: {plan_name}"
+        )
+    elif status in ["cancelled", "expired", "failed"]:
+        db.update({"plan":"free", "subscriber": False}, User.telegram_id == telegram_id)
+        await app.send_message(
+            chat_id=telegram_id,
+            text=f"📢 Subscription Inactive ❌\nManage your subscription here: "
+                 f"<a href=\"{billing_url}\"><b>Manage Subscription</b></a>"
+        )
 
     return {"ok": True}
 

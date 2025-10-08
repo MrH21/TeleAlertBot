@@ -124,7 +124,7 @@ def get_key_levels(symbol="XRPUSDT", interval=INTVL, clusters=6):
     weights = []
     VOLUME_SCALE = 50_000_000
     
-    for h, l, c, v in candles:
+    for o, h, l, c, v in candles:
         prices.extend([h, l])
         weight = np.log1p(v / VOLUME_SCALE)
         weights.extend([weight, weight]) # weighting for h and l by volume

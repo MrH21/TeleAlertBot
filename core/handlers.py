@@ -3,6 +3,7 @@ from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MA
 from core.utilities import get_plan, fetch_current_price
 from core.cache import recent_whales_cache
 from ripple.xrp_functions import format_whale_alert, get_xrp_health, get_key_levels
+from indicators.data_processing import process_indicators
 from config import logger, ADMIN_ID
 import asyncio
 from telegram.ext import ContextTypes, ConversationHandler, CallbackContext
@@ -296,7 +297,59 @@ async def xrpnet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         notice = "💡 You are currently on the *Free* plan. To get whale alerts /upgrade"
         await update.message.reply_text(notice, parse_mode="Markdown")
   
+# --- Market Insights handler ---
+async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user = db.get(User_Query.user_id == user_id)
     
+    if not user:
+        await update.message.reply_text("❌ Please use /start first.")
+        return
+    
+    plan = await get_plan(user)
+    
+    if plan == "free":
+        await update.message.reply_text("❌ This is a Premium feature. You will need to /upgrade to use.", parse_mode="Markdown")
+        return
+
+    price = await fetch_current_price("XRPUSDT")
+
+    # Get technical indicators
+    indicator_results = process_indicators()
+    
+    ema_insight = indicator_results.get('ema_insight', '')
+    macd_insight = indicator_results.get('macd_insight', '')
+    rsi_insight = indicator_results.get('rsi_insight', '')
+    macd_trend = indicator_results.get('macd_trend', '')
+    last_rsi = indicator_results.get('rsi', 0)
+    trend = indicator_results.get('trend', '')
+    sr_insight = indicator_results.get('sr_insight', '')
+    overall = indicator_results.get('overall', '')
+    confidence = indicator_results.get('confidence', 0)
+    
+    if "nearing" in sr_insight.lower():
+        msg = f"With the current price - ${price:.4f} nearing key levels, watch out for possible breakout as momentum and trend evolve."
+    elif "approaching" in sr_insight.lower():
+        msg = f"The current price of - ${price:.4f} is approaching key levels, watch out for possible rejection as momentum and trend evolve."
+    else:
+        msg = f"With the current price - ${price:.4f} trading between key levels, watch out for a possible market shift as momentum and trend evolve."
+        
+    
+    # Combined Analytical Insight
+    combined_insight = (
+        f"*EMA200*: {ema_insight}\n\n"
+        f"*MACD*: {macd_insight}\n\n"
+        f"*RSI*: {rsi_insight}\n\n"
+        f"*Support & Resistance Levels*: {sr_insight}\n\n"
+        f"📝 *Analyst Summary*: \n\n"
+        f"Indicators show *{macd_trend.lower()}* momentum within a *{trend.lower()}* context. "
+        f"RSI suggests *{('strong' if last_rsi > 60 else 'balanced' if 40 <= last_rsi <= 60 else 'weak')}* momentum. \n\n"
+        f"{msg} \n\n"
+        f"Overall, the setup leans *{overall.lower()}* with confidence score of 🌡 *{confidence}/10.*"
+        )
+    
+    await update.message.reply_text(f"💡 *Market Insights:*\n\n{combined_insight}", parse_mode="Markdown")
+  
 # --- Whale button handler ----
 async def whale_button_handler(update: Update, context:CallbackContext):
     query = update.callback_query

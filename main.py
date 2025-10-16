@@ -18,42 +18,52 @@ if not SIGNING_SECRET:
 
 @app.post("/woocommerce/webhook")
 async def woo_webhook(request: Request):
-    # Optional secret validation
     secret = request.query_params.get("secret")
     if secret != SIGNING_SECRET:
         return {"ok": False, "error": "Invalid secret"}
 
     payload = await request.json()
-    print("WooCommerce Webhook payload:", payload)  # Debugging
+    print("WP Swings webhook payload:", payload)
 
-    # Retrieve Telegram ID (must be included in WooCommerce subscription metadata)
-    telegram_id = payload.get('meta', {}).get('telegram_id')
+    # --- 1️⃣ Extract Telegram ID from order meta ---
+    meta_data = payload.get("meta_data", [])
+    telegram_id = next((m.get("value") for m in meta_data if m.get("key") == "_telegram_id"), None)
     if not telegram_id:
         logger.error("Telegram ID not found in webhook payload.")
         return {"ok": False, "error": "Telegram ID not found"}
-    
     telegram_id = int(telegram_id)
-    User = User_Query()  # Your DB query class
 
-    # Extract plan details
-    line_items = payload.get('line_items', [])
-    plan_name = line_items[0].get('name') if line_items else "Unknown Plan"
-    billing_url = f"https://lupocreative.online/my-account/subscriptions/{payload.get('id')}"
+    # --- 2️⃣ Detect subscription meta ---
+    is_subscription = next((m.get("value") for m in meta_data if m.get("key") == "_is_wps_subscription"), None)
+    if is_subscription != "yes":
+        # Ignore normal product orders
+        return {"ok": True, "msg": "Not a subscription order"}
 
-    # Map WooCommerce subscription status to your program logic
-    status = payload.get('status')
-    if status in ["active", "on-hold", "pending"]:  # Treat 'on-hold' as active if you want
+    subscription_status = next(
+        (m.get("value") for m in meta_data if m.get("key") == "_subscription_status"), "unknown"
+    )
+
+    plan_name = payload.get("line_items", [{}])[0].get("name", "Unknown Plan")
+    billing_url = f"https://lupocreative.online/my-account/orders/{payload.get('id')}"
+
+    User = User_Query()
+
+    # --- 3️⃣ Update your database + Telegram alert ---
+    if subscription_status in ["active", "on-hold"]:
         db.update({"plan": "premium", "subscriber": True}, User.telegram_id == telegram_id)
         await app.send_message(
             chat_id=telegram_id,
             text=f"📢 Subscription Active ✅ Plan: {plan_name}"
         )
-    elif status in ["cancelled", "expired", "failed"]:
-        db.update({"plan":"free", "subscriber": False}, User.telegram_id == telegram_id)
+    elif subscription_status in ["cancelled", "expired", "failed"]:
+        db.update({"plan": "free", "subscriber": False}, User.telegram_id == telegram_id)
         await app.send_message(
             chat_id=telegram_id,
-            text=f"📢 Subscription Inactive ❌\nManage your subscription here: "
-                 f"<a href=\"{billing_url}\"><b>Manage Subscription</b></a>"
+            text=(
+                f"📢 Subscription Inactive ❌\n"
+                f"Manage your subscription here: "
+                f"<a href=\"{billing_url}\"><b>Manage Subscription</b></a>"
+            ),
         )
 
     return {"ok": True}

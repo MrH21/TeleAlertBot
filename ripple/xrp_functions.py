@@ -105,13 +105,14 @@ def get_candles(symbol="XRPUSDT", interval=INTVL, limit=ML_lookback):
     candles = []
     for c in data:
         try:
+            time = int(c[0])
             open = float(c[1])
             high = float(c[2])
             low = float(c[3])
             close = float(c[4])
             volume = float(c[5])
             
-            candles.append((open, high,low,close,volume))
+            candles.append((time, open, high, low, close, volume))
         except ValueError:
             continue
     return candles
@@ -124,7 +125,7 @@ def get_key_levels(symbol="XRPUSDT", interval=INTVL, clusters=6):
     weights = []
     VOLUME_SCALE = 50_000_000
     
-    for o, h, l, c, v in candles:
+    for _, _, h, l, _, v in candles:
         prices.extend([h, l])
         weight = np.log1p(v / VOLUME_SCALE)
         weights.extend([weight, weight]) # weighting for h and l by volume

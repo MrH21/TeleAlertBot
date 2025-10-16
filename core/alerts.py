@@ -2,8 +2,9 @@
 from config import logger
 from core.db import db, User_Query
 from core.utilities import fetch_current_price, get_plan, calculate_price_change
-from ripple.xrp_functions import get_whale_txs, format_whale_alert, update_recent_whales, get_candles
 from core.cache import recent_whales_cache, user_sent_whales, MAX_WHALE_CACHE
+from ripple.xrp_functions import get_whale_txs, format_whale_alert, update_recent_whales, get_candles
+from indicators.data_processing import process_indicators
 import pandas as pd
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -70,7 +71,7 @@ async def check_all_alerts(app):
                     if len(candles) < 2:
                         raise ValueError(f"Not enough candles returned for XRPUSDT: {candles}")
 
-                    prev_price = float(candles[0][0])
+                    prev_price = float(candles[0][3])
                     last_price = float(candles[1][3])
 
                     price_change = calculate_price_change(prev_price, last_price)  # old_price is fetched inside the function
@@ -87,6 +88,11 @@ async def check_all_alerts(app):
                     logger.info(f"Checking {symbol}: price={current_price}, target={price_target}, direction={direction}, hit={hit}")
                 except Exception as e:
                     logger.error(f"Error calculating price change for {symbol}: {e}")
+                    
+                # print last rsi
+                indicator_results = process_indicators()
+                print(f"Last RSI: {indicator_results.get('rsi')}, MACD: {indicator_results.get('macd')}, Signal: {indicator_results.get('signal')} "
+                      f"Trend: {indicator_results.get('trend')}, EMA-200: {indicator_results.get('ema_200')} ~ Insight: {indicator_results.get('insight')}")
 
                 if hit:
                     # Send alert

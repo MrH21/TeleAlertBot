@@ -62,12 +62,12 @@ def process_indicators():
         if last_close > last_ema_200:
             trend = "Uptrend"
             ema_insight = (
-                f"Price ({last_close:.4f}) is above moving average ({last_ema_200:.4f}) — long-term trend remains upward."
+                f"Price (${last_close:.4f}) is above moving average (${last_ema_200:.4f}) — long-term trend remains upward."
             )
         else:
             trend = "Downtrend"
             ema_insight = (
-                f"Price ({last_close:.4f}) is below moving average ({last_ema_200:.4f}) — long-term trend remains downward."
+                f"Price (${last_close:.4f}) is below moving average (${last_ema_200:.4f}) — long-term trend remains downward."
             )
             
         # get ML timeframe and key levels
@@ -88,7 +88,7 @@ def process_indicators():
         near_threshold = 0.005   # 0.5%
         moderate_threshold = 0.015  # 1.5%
 
-        if dist_to_resistance < near_threshold:
+        if nearest_resistance > last_close and dist_to_resistance < near_threshold:
             if macd_trend == "Bullish" and last_rsi < 70:
                 sr_insight = (
                     f"Price (${last_close:.4f}) is nearing resistance at ${nearest_resistance:.4f}. "
@@ -100,7 +100,7 @@ def process_indicators():
                     "Momentum appears to be cooling — watch for possible rejection."
                 )
 
-        elif dist_to_support < near_threshold:
+        elif nearest_support < last_close and dist_to_support < near_threshold:
             if macd_trend == "Bearish" and last_rsi > 30:
                 sr_insight = (
                     f"Price (${last_close:.4f}) is nearing support at ${nearest_support:.4f}. "
@@ -112,13 +112,13 @@ def process_indicators():
                     "Momentum stabilizing — potential bounce zone."
                 )
 
-        elif dist_to_resistance < moderate_threshold:
+        elif nearest_resistance > last_close and dist_to_resistance < moderate_threshold:
             sr_insight = (
                 f"Price (${last_close:.4f}) is within range of resistance at ${nearest_resistance:.4f}. "
                 "Monitor for breakout confirmation or pullback."
             )
 
-        elif dist_to_support < moderate_threshold:
+        elif nearest_support < last_close and dist_to_support < moderate_threshold:
             sr_insight = (
                 f"Price (${last_close:.4f}) is within range of support at ${nearest_support:.4f}. "
                 "Market may test this level again soon."

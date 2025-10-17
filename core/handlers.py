@@ -1,6 +1,6 @@
 from core.db import db, User_Query
 from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS, SET_PARAMS
-from core.utilities import get_plan, fetch_current_price
+from core.utilities import get_plan, fetch_current_price, get_ticker_keyboard
 from core.cache import recent_whales_cache
 from ripple.xrp_functions import format_whale_alert, get_xrp_health, get_key_levels
 from indicators.data_processing import process_indicators
@@ -82,31 +82,12 @@ async def addalert(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ You have reached your *{plan.upper()}* plan limit of *{MAX_ALERTS[plan]}* alerts.", parse_mode="Markdown")
         return ConversationHandler.END
 
-    keyboard_ticker = [
-        [InlineKeyboardButton('BTCUSDT', callback_data="ticker_BTCUSDT")],
-        [InlineKeyboardButton('ETHUSDT', callback_data="ticker_ETHUSDT")],
-        [InlineKeyboardButton('XRPUSDT', callback_data="ticker_XRPUSDT")],
-        [InlineKeyboardButton('SOLUSDT', callback_data="ticker_SOLUSDT")],
-        [InlineKeyboardButton('LINKUSDT', callback_data="ticker_LINKUSDT")],
-        [InlineKeyboardButton('DOTUSDT', callback_data="ticker_DOTUSDT")],
-        [InlineKeyboardButton('ADAUSDT', callback_data="ticker_ADAUSDT")],
-        [InlineKeyboardButton('BNBUSDT', callback_data="ticker_BNBUSDT")],
-        [InlineKeyboardButton('SUIUSDT', callback_data="ticker_SUIUSDT")],
-        [InlineKeyboardButton('LTCUSDT', callback_data="ticker_LTCUSDT")]
-    ]
-    print(db.get(User_Query.user_id == user_id))
-    reply_markup = InlineKeyboardMarkup(keyboard_ticker)
-    await update.message.reply_text("📊 Select the ticker:", reply_markup=reply_markup)
+    await update.message.reply_text("📊 Select the ticker:", reply_markup=get_ticker_keyboard(columns=2))
     return SELECTING_TICKER
 
 # --- Setting the symbol for add alert ---
 async def select_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        user_id = update.effective_user.id
-        user = db.get(User_Query.user_id == user_id)
-        ml_intv = user.get("ml_timeline","1d")
-        plan = await get_plan(user)
-        
+    try:        
         query = update.callback_query
         await query.answer()  # Acknowledge the callback query
         
@@ -114,18 +95,8 @@ async def select_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["ticker"] = ticker
         
         current_price = await fetch_current_price(ticker)
-        if (context.user_data["ticker"] == "XRPUSDT") and (plan == "premium"):
-            close, support, resistance = get_key_levels(interval=ml_intv)
-            support_str = [f"${lvl:.4f}" for lvl in support]
-            resistance_str = [f"${lvl:.4f}" for lvl in resistance]
-            await query.edit_message_text(f"🎯 Enter target price for *{context.user_data['ticker']}*\n\n"
-                                          f"🏷 Current price:  ${close:,.4f}\n\n"
-                                          f"*Machine Learning Levels:*\n"
-                                          f"🔻 Resistance: {resistance_str}\n"
-                                          f"🟢 Support: {support_str}\n\n"
-                                          f"_(Caculated on timeline of {ml_intv})_", parse_mode='Markdown')
-        else:
-            await query.edit_message_text(f"🎯 Enter target price for *{context.user_data['ticker']}* with current price *{current_price:,.4f}*", parse_mode='Markdown')
+        await query.edit_message_text(f"🎯 Enter target price for *{context.user_data['ticker']}* with current price *{current_price:,.4f}*", parse_mode='Markdown')
+        
         return SETTING_TARGET
     except Exception as e:
         logger.error(f"Error in select_ticker: {e}")
@@ -333,7 +304,13 @@ async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = f"The current price of - ${price:.4f} is approaching key levels, watch out for possible rejection as momentum and trend evolve."
     else:
         msg = f"With the current price - ${price:.4f} trading between key levels, watch out for a possible market shift as momentum and trend evolve."
-        
+    
+    if confidence < 4:
+        conf_meaning = "Market signals are mixed; caution advised before acting."
+    elif 4 <= confidence <= 6:
+        conf_meaning = "Conditions suggest possible reaction at key levels, but wait for confirmation."
+    else:
+        conf_meaning = "Strong alignment between technical levels, momentum, and market structure."
     
     # Combined Analytical Insight
     combined_insight = (
@@ -345,10 +322,10 @@ async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Indicators show *{macd_trend.lower()}* momentum within a *{trend.lower()}* context. "
         f"RSI suggests *{('strong' if last_rsi > 60 else 'balanced' if 40 <= last_rsi <= 60 else 'weak')}* momentum. \n\n"
         f"{msg} \n\n"
-        f"Overall, the setup leans *{overall.lower()}* with confidence score of 🌡 *{confidence}/10.*"
+        f"Overall, the setup leans *{overall.lower()}* with confidence score of 🌡 *{confidence}/10.* ~ {conf_meaning}"
         )
     
-    await update.message.reply_text(f"💡 *Market Insights:*\n\n{combined_insight}", parse_mode="Markdown")
+    await update.message.reply_text(f"💡 *Market Insights:* _(Interval 1hr)_ \n\n{combined_insight}", parse_mode="Markdown")
   
 # --- Whale button handler ----
 async def whale_button_handler(update: Update, context:CallbackContext):

@@ -5,7 +5,24 @@ import aiohttp
 from core.db import db, User_Query
 from ripple.xrp_functions import get_candles
 from datetime import datetime, timezone
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+    
+# --- Inline Keyboard function ---
+TICKERS = ["BTCUSDT", "ETHUSDT", "XRPUSDT", "SOLUSDT", "LINKUSDT", "DOTUSDT", "ADAUSDT", "BNBUSDT", "SUIUSDT", "LTCUSDT"]
+
+def get_ticker_keyboard(columns: int = 2):
+    keyboard =[]
+    row = []
+    for i, ticker in enumerate(TICKERS, start=1):
+        button = InlineKeyboardButton(ticker, callback_data=f"ticker_{ticker}")
+        row.append(button)
+        if i % columns == 0:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    return InlineKeyboardMarkup(keyboard)
 
 # --- Get the membership status ---
 async def get_plan(user):
@@ -49,8 +66,7 @@ def calculate_price_change(old_price, new_price):
     except Exception as e:
         logger.error(f"Error calculating price change: {e}")
         return None
-    
-# --- Fetch and handle support and resistance levels ---
+
 
     
 

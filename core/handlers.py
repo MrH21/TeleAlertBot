@@ -1,8 +1,9 @@
 from core.db import db, User_Query
-from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS, SET_PARAMS
+from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS, SELECTING_TICKER_INSIGHTS, SET_PARAMS
 from core.utilities import get_plan, fetch_current_price, get_ticker_keyboard
+from indicators.data_processing import process_indicators
 from core.cache import recent_whales_cache
-from ripple.xrp_functions import format_whale_alert, get_xrp_health, get_key_levels
+from ripple.xrp_functions import format_whale_alert, get_xrp_health
 from indicators.data_processing import process_indicators
 from config import logger, ADMIN_ID
 import asyncio
@@ -95,7 +96,7 @@ async def select_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["ticker"] = ticker
         
         current_price = await fetch_current_price(ticker)
-        await query.edit_message_text(f"🎯 Enter target price for *{context.user_data['ticker']}* with current price *{current_price:,.4f}*", parse_mode='Markdown')
+        await query.edit_message_text(f"🎯 Enter target price for *{context.user_data['ticker']}* with current price *${current_price:,.4f}*", parse_mode='Markdown')
         
         return SETTING_TARGET
     except Exception as e:
@@ -267,26 +268,50 @@ async def xrpnet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:  # Free plan
         notice = "💡 You are currently on the *Free* plan. To get whale alerts /upgrade"
         await update.message.reply_text(notice, parse_mode="Markdown")
+        
+# --- Select insights target ---
+async def insight_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user = db.get(User_Query.user_id == user_id)
+
+    if not user:
+        await update.message.reply_text("❌ Please use /start first.")
+        return ConversationHandler.END
+
+    plan = await get_plan(user)
+    if plan == "free" and len(user["alerts"]) >= MAX_ALERTS[plan]:
+        await update.message.reply_text(f"❌ You are currently on the *{plan.upper()}* and don't have access to get crypto insights.\n"
+                                        "You can upgrade to PREMIUM for dynamic insight on tokens. \nProceed to /upgrade to upgrade your plan.", parse_mode='Markdown')
+        return ConversationHandler.END
+
+    await update.message.reply_text("📊 Select the ticker:", reply_markup=get_ticker_keyboard(columns=2))
+    return SELECTING_TICKER_INSIGHTS
   
 # --- Market Insights handler ---
 async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = db.get(User_Query.user_id == user_id)
     
+    query = update.callback_query
+    await query.answer()  # Acknowledge the callback query
+    
+    ticker = query.data.replace("ticker_", "")
+    context.user_data["ticker"] = ticker
+    
     if not user:
-        await update.message.reply_text("❌ Please use /start first.")
+        await query.message.reply_text("❌ Please use /start first.")
         return
     
     plan = await get_plan(user)
     
     if plan == "free":
-        await update.message.reply_text("❌ This is a Premium feature. You will need to /upgrade to use.", parse_mode="Markdown")
+        await query.message.reply_text("❌ This is a Premium feature. You will need to /upgrade to use.", parse_mode='Markdown')
         return
 
-    price = await fetch_current_price("XRPUSDT")
+    price = await fetch_current_price(ticker)
 
     # Get technical indicators
-    indicator_results = process_indicators()
+    indicator_results = process_indicators(ticker)
     
     ema_insight = indicator_results.get('ema_insight', '')
     macd_insight = indicator_results.get('macd_insight', '')
@@ -316,16 +341,16 @@ async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
     combined_insight = (
         f"*EMA200*: {ema_insight}\n\n"
         f"*MACD*: {macd_insight}\n\n"
-        f"*RSI*: {rsi_insight}\n\n"
+        f"*RSI* ({last_rsi:.2f}): {rsi_insight}\n\n"
         f"*Support & Resistance Levels*: {sr_insight}\n\n"
         f"📝 *Analyst Summary*: \n\n"
-        f"Indicators show *{macd_trend.lower()}* momentum within a *{trend.lower()}* context. "
+        f"Indicators show *{macd_trend.upper()}* momentum within a *{trend.upper()}* context. "
         f"RSI suggests *{('strong' if last_rsi > 60 else 'balanced' if 40 <= last_rsi <= 60 else 'weak')}* momentum. \n\n"
         f"{msg} \n\n"
-        f"Overall, the setup leans *{overall.lower()}* with confidence score of 🌡 *{confidence}/10.* ~ {conf_meaning}"
+        f"Overall, the setup leans *{overall.upper()}* with confidence score of 🌡 *{confidence}/10.* ~ {conf_meaning}"
         )
     
-    await update.message.reply_text(f"💡 *Market Insights:* _(Interval 1hr)_ \n\n{combined_insight}", parse_mode="Markdown")
+    await query.message.reply_text(f"💡 *Market Insights:* _(on last completed 1h candle)_ \n\n{combined_insight}", parse_mode="Markdown")
   
 # --- Whale button handler ----
 async def whale_button_handler(update: Update, context:CallbackContext):

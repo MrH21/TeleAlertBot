@@ -6,7 +6,7 @@ from tinydb import TinyDB, Query
 import asyncio
 import numpy as np
 import requests
-from sklearn.cluster import MiniBatchKMeans
+
 from xrpl.asyncio.clients import AsyncJsonRpcClient
 from xrpl.models.requests import Ledger, ServerInfo
 
@@ -116,36 +116,6 @@ def get_candles(symbol="XRPUSDT", interval=INTVL, limit=ML_lookback):
         except ValueError:
             continue
     return candles
-
-def get_key_levels(symbol="XRPUSDT", interval=INTVL, clusters=6):
-    candles = get_candles(symbol,interval)
-    latest_close = candles[-1][2]  # last candle's close price
-    
-    prices = []
-    weights = []
-    VOLUME_SCALE = 50_000_000
-    
-    for _, _, h, l, _, v in candles:
-        prices.extend([h, l])
-        weight = np.log1p(v / VOLUME_SCALE)
-        weights.extend([weight, weight]) # weighting for h and l by volume
-        
-    prices = np.array(prices).reshape(-1,1)
-    weights = np.array(weights)
-    
-    # run MiniBatchKMeans
-    kmeans = MiniBatchKMeans(n_clusters=clusters, random_state=0, n_init=10,batch_size=256)
-    kmeans.fit(prices,sample_weight=weights)
-    
-    levels = sorted(kmeans.cluster_centers_.flatten())
-    levels = [round(l, 4) for l in levels]
-    
-    # Split into support/resistance based on latest close
-    support = [lvl for lvl in levels if lvl < latest_close]
-    resistance = [lvl for lvl in levels if lvl > latest_close]
-
-    return latest_close, support, resistance
-
 
 # --- Get the exchange by address ---
 def get_exchange_by_address(address):

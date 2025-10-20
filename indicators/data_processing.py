@@ -1,15 +1,66 @@
 import pandas as pd
 import pandas_ta as ta
+import numpy as np
 from ripple.xrp_functions import get_candles
 from core.db import db, User_Query
-from ripple.xrp_functions import get_key_levels
+from sklearn.cluster import MiniBatchKMeans
+
+# --- Insights database creation ---
+
+'''
+def create_insights_table():
+    insights_db = db[
+            "macd": last_macd,
+            "signal": last_macd_signal,
+            "macd_trend": macd_trend,
+            "macd_insight": macd_insight,
+            "rsi": last_rsi,
+            "rsi_insight": rsi_insight,
+            "trend": trend,
+            "ema_200": last_ema_200,
+            "ema_insight": ema_insight,
+            "sr_insight": sr_insight,
+            "overall": overall,
+            "confidence": confidence
+    ]
+'''
+# --- Get key levels using ML clustering ---
+def get_key_levels(symbol, interval="1h", clusters=6):
+    candles = get_candles(symbol,interval)
+    latest_close = candles[-1][2]  # last candle's close price
+    
+    prices = []
+    weights = []
+    VOLUME_SCALE = 50_000_000
+    
+    for _, _, h, l, _, v in candles:
+        prices.extend([h, l])
+        weight = np.log1p(v / VOLUME_SCALE)
+        weights.extend([weight, weight]) # weighting for h and l by volume
+        
+    prices = np.array(prices).reshape(-1,1)
+    weights = np.array(weights)
+    
+    # run MiniBatchKMeans
+    kmeans = MiniBatchKMeans(n_clusters=clusters, random_state=0, n_init=10,batch_size=256)
+    kmeans.fit(prices,sample_weight=weights)
+    
+    levels = sorted(kmeans.cluster_centers_.flatten())
+    levels = [round(l, 4) for l in levels]
+    
+    # Split into support/resistance based on latest close
+    support = [lvl for lvl in levels if lvl < latest_close]
+    resistance = [lvl for lvl in levels if lvl > latest_close]
+
+    return latest_close, support, resistance
+
 
 # --- Process the rsi data ---
-def process_indicators():
+def process_indicators(ticker):
     try:
-        
+        symbol = ticker.upper()
         # Extract the candle data from exchange
-        candles = get_candles(symbol="XRPUSDT", interval="1h", limit=1000)
+        candles = get_candles(symbol=symbol, interval="1h", limit=1000)
         
         df = pd.DataFrame(candles, columns=["timestamp", "open", "high", "low", "close", "volume"])
         df["close"] = df["close"].astype(float)
@@ -71,7 +122,7 @@ def process_indicators():
             )
             
         # get ML timeframe and key levels
-        close, support, resistance = get_key_levels(interval="1h")
+        close, support, resistance = get_key_levels(symbol=ticker)
         support_str = [f"${lvl:.4f}" for lvl in support]
         resistance_str = [f"${lvl:.4f}" for lvl in resistance]
         # Join them for display

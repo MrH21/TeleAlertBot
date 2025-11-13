@@ -4,6 +4,7 @@ uvicorn[standard]==0.22.0
 httpx
 aiohttp
 pandas
+pandas_ta
 numpy
 scikit-learn
 tinydb

@@ -345,7 +345,7 @@ async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"*Support & Resistance Levels*: {sr_insight}\n\n"
         f"📝 *Analyst Summary*: \n\n"
         f"Indicators show *{macd_trend.upper()}* momentum within a *{trend.upper()}* context. "
-        f"RSI suggests *{('strong' if last_rsi > 60 else 'balanced' if 40 <= last_rsi <= 60 else 'weak')}* momentum. \n\n"
+        f"RSI suggests *{('strong' if last_rsi.upper() > 60 else 'balanced' if 40 <= last_rsi.upper() <= 60 else 'WEAK')}* momentum. \n\n"
         f"{msg} \n\n"
         f"Overall, the setup leans *{overall.upper()}* with confidence score of 🌡 *{confidence}/10.* ~ {conf_meaning}"
         )

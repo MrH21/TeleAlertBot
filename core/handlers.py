@@ -4,7 +4,6 @@ from core.utilities import get_plan, fetch_current_price, get_ticker_keyboard
 from indicators.data_processing import process_indicators
 from core.cache import recent_whales_cache
 from ripple.xrp_functions import format_whale_alert, get_xrp_health
-from indicators.data_processing import process_indicators
 from config import logger, ADMIN_ID
 import asyncio
 from telegram.ext import ContextTypes, ConversationHandler, CallbackContext
@@ -289,30 +288,37 @@ async def insight_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
   
 # --- Market Insights handler ---
 async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    user = db.get(User_Query.user_id == user_id)
-    
     query = update.callback_query
-    await query.answer()  # Acknowledge the callback query
-    
+
+    # Guard: if no callback_query, user hit /insights again (wrong handler)
+    if not query:
+        await update.message.reply_text("Send /insights again to select a ticker.")
+        return
+
+    await query.answer()
+
     ticker = query.data.replace("ticker_", "")
     context.user_data["ticker"] = ticker
-    
+
+    user_id = update.effective_user.id
+    user = db.get(User_Query.user_id == user_id)
+
     if not user:
         await query.message.reply_text("❌ Please use /start first.")
         return
-    
+
     plan = await get_plan(user)
-    
+
     if plan == "free":
-        await query.message.reply_text("❌ This is a Premium feature. You will need to /upgrade to use.", parse_mode='Markdown')
+        await query.message.reply_text(
+            "❌ This is a Premium feature. You will need to /upgrade to use.",
+            parse_mode='Markdown'
+        )
         return
 
     price = await fetch_current_price(ticker)
-
-    # Get technical indicators
     indicator_results = process_indicators(ticker)
-    
+
     ema_insight = indicator_results.get('ema_insight', '')
     macd_insight = indicator_results.get('macd_insight', '')
     rsi_insight = indicator_results.get('rsi_insight', '')
@@ -322,35 +328,39 @@ async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sr_insight = indicator_results.get('sr_insight', '')
     overall = indicator_results.get('overall', '')
     confidence = indicator_results.get('confidence', 0)
-    
+
+    # --- message formatting same as before ---
     if "nearing" in sr_insight.lower():
-        msg = f"With the current price - ${price:.4f} nearing key levels, watch out for possible breakout as momentum and trend evolve."
+        msg = f"With the current price - ${price:.4f} nearing key levels, watch out for possible breakout."
     elif "approaching" in sr_insight.lower():
-        msg = f"The current price of - ${price:.4f} is approaching key levels, watch out for possible rejection as momentum and trend evolve."
+        msg = f"The current price of - ${price:.4f} is approaching key levels, possible rejection ahead."
     else:
-        msg = f"With the current price - ${price:.4f} trading between key levels, watch out for a possible market shift as momentum and trend evolve."
-    
+        msg = f"With the current price - ${price:.4f} trading between key levels, momentum could shift."
+
     if confidence < 4:
-        conf_meaning = "Market signals are mixed; caution advised before acting."
+        conf_meaning = "Market signals are mixed; caution advised."
     elif 4 <= confidence <= 6:
-        conf_meaning = "Conditions suggest possible reaction at key levels, but wait for confirmation."
+        conf_meaning = "Possible reaction at key levels; wait for confirmation."
     else:
-        conf_meaning = "Strong alignment between technical levels, momentum, and market structure."
-    
-    # Combined Analytical Insight
+        conf_meaning = "Strong alignment across indicators."
+
     combined_insight = (
         f"*EMA200*: {ema_insight}\n\n"
         f"*MACD*: {macd_insight}\n\n"
         f"*RSI* ({last_rsi:.2f}): {rsi_insight}\n\n"
-        f"*Support & Resistance Levels*: {sr_insight}\n\n"
+        f"*Support & Resistance*: {sr_insight}\n\n"
         f"📝 *Analyst Summary*: \n\n"
-        f"Indicators show *{macd_trend.upper()}* momentum within a *{trend.upper()}* context. "
-        f"RSI suggests *{('strong' if last_rsi.upper() > 60 else 'balanced' if 40 <= last_rsi.upper() <= 60 else 'WEAK')}* momentum. \n\n"
-        f"{msg} \n\n"
-        f"Overall, the setup leans *{overall.upper()}* with confidence score of 🌡 *{confidence}/10.* ~ {conf_meaning}"
-        )
-    
-    await query.message.reply_text(f"💡 *Market Insights:* _(on last completed 1h candle)_ \n\n{combined_insight}", parse_mode="Markdown")
+        f"Momentum: *{macd_trend.upper()}*\n"
+        f"Trend context: *{trend.upper()}*\n"
+        f"RSI momentum: *{('strong' if last_rsi > 60 else 'balanced' if 40 <= last_rsi <= 60 else 'weak')}*\n\n"
+        f"{msg}\n\n"
+        f"Overall bias: *{overall.upper()}*, confidence 🌡 *{confidence}/10* — {conf_meaning}"
+    )
+
+    await query.message.reply_text(
+        f"💡 *Market Insights - {ticker}:* _(on last completed 1h candle)_ \n\n{combined_insight}",
+        parse_mode="Markdown"
+    )
   
 # --- Whale button handler ----
 async def whale_button_handler(update: Update, context:CallbackContext):

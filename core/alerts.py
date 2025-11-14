@@ -89,11 +89,6 @@ async def check_all_alerts(app):
                 except Exception as e:
                     logger.error(f"Error calculating price change for {symbol}: {e}")
                     
-                # print last rsi
-                indicator_results = process_indicators()
-                print(f"Last RSI: {indicator_results.get('rsi')}, MACD: {indicator_results.get('macd')}, Signal: {indicator_results.get('signal')} "
-                      f"Trend: {indicator_results.get('trend')}, EMA-200: {indicator_results.get('ema_200')} ~ Insight: {indicator_results.get('insight')}")
-
                 if hit:
                     # Send alert
                     await app.bot.send_message(

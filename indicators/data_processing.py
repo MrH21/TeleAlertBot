@@ -131,8 +131,16 @@ def process_indicators(ticker):
         sr_insight = f"Key support levels: {support_text}\nKey resistance levels: {resistance_text}"
         
         # Find nearest key levels to current price  
-        nearest_support = min(support, key=lambda x: abs(x - last_close))
-        nearest_resistance = min(resistance, key=lambda x: abs(x - last_close))        
+        if support:
+            nearest_support = min(support, key=lambda x: abs(x - last_close))
+        else:
+            nearest_support = last_close
+
+        if resistance:
+            nearest_resistance = min(resistance, key=lambda x: abs(x - last_close))
+        else:
+            nearest_resistance = last_close
+
         dist_to_support = abs(last_close - nearest_support) / last_close
         dist_to_resistance = abs(nearest_resistance - last_close) / last_close
         

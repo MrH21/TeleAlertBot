@@ -2,6 +2,7 @@ from core.db import db, User_Query
 from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS, SELECTING_TICKER_INSIGHTS, SET_PARAMS
 from core.utilities import get_plan, fetch_current_price, get_ticker_keyboard
 from indicators.data_processing import process_indicators
+from indicators.forecasting import forecasting
 from core.cache import recent_whales_cache
 from ripple.xrp_functions import format_whale_alert, get_xrp_health
 from config import logger, ADMIN_ID
@@ -328,6 +329,15 @@ async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sr_insight = indicator_results.get('sr_insight', '')
     overall = indicator_results.get('overall', '')
     confidence = indicator_results.get('confidence', 0)
+    forecast = indicator_results.get('forecast', pd.DataFrame())
+
+    # Safely format the forecast - escape special characters
+    if not forecast.empty:
+        forecast_str = forecast.to_string()
+        # Escape special Markdown characters
+        forecast_str = forecast_str.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`').replace('[', '\\[').replace(']', '\\]')
+    else:
+        forecast_str = "No forecast data available"
 
     # --- message formatting same as before ---
     if "nearing" in sr_insight.lower():
@@ -355,6 +365,8 @@ async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"RSI momentum: *{('strong' if last_rsi > 60 else 'balanced' if 40 <= last_rsi <= 60 else 'weak')}*\n\n"
         f"{msg}\n\n"
         f"Overall bias: *{overall.upper()}*, confidence 🌡 *{confidence}/10* — {conf_meaning}"
+        f"\n\n *7 Window Forecast*:\n"
+        f"{forecast_str}"
     )
 
     await query.message.reply_text(

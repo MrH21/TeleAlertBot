@@ -2,6 +2,7 @@ import pandas as pd
 import pandas_ta as ta
 import numpy as np
 from ripple.xrp_functions import get_candles
+from indicators.forecasting import forecasting
 from core.db import db, User_Query
 from sklearn.cluster import MiniBatchKMeans
 
@@ -246,6 +247,15 @@ def process_indicators(ticker):
         else:
             overall = "NEUTRAL"
 
+        # forecasting part
+        df_forecast = pd.DataFrame({
+            'unique_id': symbol,
+            'ds': pd.to_datetime(df['timestamp'], unit='ms'),
+            'y': df['close']
+        })
+
+        forecast = forecasting(df=df_forecast, interval='1h', h=7)
+
         return {
             "macd": last_macd,
             "signal": last_macd_signal,
@@ -258,7 +268,8 @@ def process_indicators(ticker):
             "ema_insight": ema_insight,
             "sr_insight": sr_insight,
             "overall": overall,
-            "confidence": confidence
+            "confidence": confidence,
+            "forecast": forecast
         }
 
         

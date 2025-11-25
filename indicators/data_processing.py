@@ -2,29 +2,9 @@ import pandas as pd
 import pandas_ta as ta
 import numpy as np
 from ripple.xrp_functions import get_candles
-from indicators.forecasting import forecasting
 from core.db import db, User_Query
 from sklearn.cluster import MiniBatchKMeans
 
-# --- Insights database creation ---
-
-'''
-def create_insights_table():
-    insights_db = db[
-            "macd": last_macd,
-            "signal": last_macd_signal,
-            "macd_trend": macd_trend,
-            "macd_insight": macd_insight,
-            "rsi": last_rsi,
-            "rsi_insight": rsi_insight,
-            "trend": trend,
-            "ema_200": last_ema_200,
-            "ema_insight": ema_insight,
-            "sr_insight": sr_insight,
-            "overall": overall,
-            "confidence": confidence
-    ]
-'''
 # --- Get key levels using ML clustering ---
 def get_key_levels(symbol, interval="1h", clusters=6):
     candles = get_candles(symbol,interval)
@@ -247,15 +227,6 @@ def process_indicators(ticker):
         else:
             overall = "NEUTRAL"
 
-        # forecasting part
-        df_forecast = pd.DataFrame({
-            'unique_id': symbol,
-            'ds': pd.to_datetime(df['timestamp'], unit='ms'),
-            'y': df['close']
-        })
-
-        forecast = forecasting(df=df_forecast, interval='1h', h=7)
-
         return {
             "macd": last_macd,
             "signal": last_macd_signal,
@@ -268,8 +239,7 @@ def process_indicators(ticker):
             "ema_insight": ema_insight,
             "sr_insight": sr_insight,
             "overall": overall,
-            "confidence": confidence,
-            "forecast": forecast
+            "confidence": confidence
         }
 
         

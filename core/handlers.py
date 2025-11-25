@@ -2,7 +2,6 @@ from core.db import db, User_Query
 from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS, SELECTING_TICKER_INSIGHTS, SET_PARAMS
 from core.utilities import get_plan, fetch_current_price, get_ticker_keyboard
 from indicators.data_processing import process_indicators
-from indicators.forecasting import forecasting
 from core.cache import recent_whales_cache
 from ripple.xrp_functions import format_whale_alert, get_xrp_health
 from config import logger, ADMIN_ID
@@ -24,6 +23,7 @@ async def help_command(update:Update, context:ContextTypes.DEFAULT_TYPE):
                                     "\n/myalerts - To see what your current alerts are with option to delete."
                                     "\n/xrpnet - To see ledger info and health plus recent XRP whale transactions. Enable/disable whale alerts."
                                     "\n/xrpset - To set Machine Learning parameters for support and resistance levels on XRP."
+                                    "\n/insights - To get market insights on selected crypto using technical indicators."
                                     "\n/upgrade - To upgrade your plan to premium for more alerts and features."
                                     "\n/help - See all commands available", parse_mode="Markdown")
     
@@ -365,8 +365,6 @@ async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"RSI momentum: *{('strong' if last_rsi > 60 else 'balanced' if 40 <= last_rsi <= 60 else 'weak')}*\n\n"
         f"{msg}\n\n"
         f"Overall bias: *{overall.upper()}*, confidence 🌡 *{confidence}/10* — {conf_meaning}"
-        f"\n\n *7 Window Forecast*:\n"
-        f"{forecast_str}"
     )
 
     await query.message.reply_text(
@@ -439,8 +437,6 @@ async def params_button_handler(update: Update, context:CallbackContext):
     db.update(set("ml_timeline", clock), User_Query.user_id == user_id)
     await query.edit_message_text(f"✅ Timeframe set to *{clock}*", parse_mode="Markdown")
     
-      
-        
 # --- Upgrade plan ---
 async def upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id

@@ -11,6 +11,13 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 # --- Inline Keyboard function ---
 TICKERS = ["BTCUSDT", "ETHUSDT", "XRPUSDT", "SOLUSDT", "LINKUSDT", "DOTUSDT", "ADAUSDT", "BNBUSDT", "SUIUSDT", "LTCUSDT"]
 
+# --- Binance url ---
+BINANCE_URL = "https://api.binance.com/api/v3/klines"
+
+# --- ML Parameters --- 
+INTVL = "1d"
+ML_lookback = 500
+
 def get_ticker_keyboard(columns: int = 2):
     keyboard =[]
     row = []
@@ -55,7 +62,28 @@ async def fetch_current_price(symbol="XRPUSDT"):
     except Exception as e:
         logger.error(f"Error with fetching the live price: {e}")
         return None
-    
+
+# --- Getting the recent candles ---
+def get_candles(symbol="XRPUSDT", interval=INTVL, limit=ML_lookback):
+    url = f"{BINANCE_URL}?symbol={symbol}&interval={interval}&limit={limit}"
+    data = requests.get(url).json()
+    if not isinstance(data, list):
+        raise ValueError(f"Unexpected API Response: {data}")
+    # each kline
+    candles = []
+    for c in data:
+        try:
+            time = int(c[0])
+            open = float(c[1])
+            high = float(c[2])
+            low = float(c[3])
+            close = float(c[4])
+            volume = float(c[5])
+            
+            candles.append((time, open, high, low, close, volume))
+        except ValueError:
+            continue
+    return candles    
     
 # --- Calculate price change percentage ---
 def calculate_price_change(old_price, new_price):

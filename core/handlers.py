@@ -1,8 +1,8 @@
 from core.db import db, User_Query
 from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS, SELECTING_TICKER_INSIGHTS, SET_PARAMS
 from core.utilities import get_plan, fetch_current_price, get_ticker_keyboard
-from indicators.data_processing import process_indicators
-from core.cache import recent_whales_cache
+from indicators.data_processing import get_key_levels, create_price_chart_with_levels
+from core.cache import recent_whales_cache, get_cached_symbol
 from ripple.xrp_functions import format_whale_alert, get_xrp_health
 from config import logger, ADMIN_ID
 import asyncio
@@ -21,8 +21,6 @@ reply_markup_ticker = ReplyKeyboardMarkup(keyboard_ticker, one_time_keyboard=Tru
 async def help_command(update:Update, context:ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("*Here are the bot commands available:*\n\n/start - Getting started with this bot. \n/addalert - To set your crypto symbol and target for the alert."
                                     "\n/myalerts - To see what your current alerts are with option to delete."
-                                    "\n/xrpnet - To see ledger info and health plus recent XRP whale transactions. Enable/disable whale alerts."
-                                    "\n/xrpset - To set Machine Learning parameters for support and resistance levels on XRP."
                                     "\n/insights - To get market insights on selected crypto using technical indicators."
                                     "\n/upgrade - To upgrade your plan to premium for more alerts and features."
                                     "\n/help - See all commands available", parse_mode="Markdown")
@@ -288,34 +286,133 @@ async def insight_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return SELECTING_TICKER_INSIGHTS
   
 # --- Market Insights handler ---
+
 async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
 
-    # Guard: if no callback_query, user hit /insights again (wrong handler)
-    if not query:
+    # Handle the callback from ticker selection
+    if query:
+        await query.answer()
+        ticker = query.data.replace("ticker_", "")
+        context.user_data["ticker"] = ticker
+    else:
+        # If no query, this is being called directly (shouldn't happen in normal flow)
         await update.message.reply_text("Send /insights again to select a ticker.")
-        return
-
-    await query.answer()
-
-    ticker = query.data.replace("ticker_", "")
-    context.user_data["ticker"] = ticker
+        return ConversationHandler.END
 
     user_id = update.effective_user.id
     user = db.get(User_Query.user_id == user_id)
 
     if not user:
-        await query.message.reply_text("❌ Please use /start first.")
-        return
+        await query.edit_message_text("❌ Please use /start first.")
+        return ConversationHandler.END
 
     plan = await get_plan(user)
 
     if plan == "free":
-        await query.message.reply_text(
+        await query.edit_message_text(
             "❌ This is a Premium feature. You will need to /upgrade to use.",
             parse_mode='Markdown'
         )
-        return
+        return ConversationHandler.END
+
+    price = await fetch_current_price(ticker)
+    indicator_results = get_cached_symbol(ticker)
+
+    ema_insight = indicator_results.get('insights', {}).get('ema_insight', '')
+    macd_insight = indicator_results.get('insights', {}).get('macd_insight', '')
+    rsi_insight = indicator_results.get('insights', {}).get('rsi_insight', '')
+    macd_trend = indicator_results.get('insights', {}).get('macd_trend', '')
+    last_rsi = indicator_results.get('insights', {}).get('rsi', 0)
+    trend = indicator_results.get('insights', {}).get('trend', '')
+    sr_insight = indicator_results.get('insights', {}).get('sr_insight', '')
+    overall = indicator_results.get('insights', {}).get('overall', '')
+    confidence = indicator_results.get('insights', {}).get('confidence', 0)
+    forecast = indicator_results.get('insights', {}).get('forecast', pd.DataFrame())
+
+    # Safely format the forecast - escape special characters
+    if not forecast.empty:
+        forecast_str = forecast.to_string()
+        # Escape special Markdown characters
+        forecast_str = forecast_str.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`').replace('[', '\\[').replace(']', '\\]')
+    else:
+        forecast_str = "No forecast data available"
+
+    # --- message formatting same as before ---
+    if "nearing" in sr_insight.lower():
+        msg = f"With the current price - ${price:.4f} nearing key levels, watch out for possible breakout."
+    elif "approaching" in sr_insight.lower():
+        msg = f"The current price of - ${price:.4f} is approaching key levels, possible rejection ahead."
+    else:
+        msg = f"With the current price - ${price:.4f} trading between key levels, momentum could shift."
+
+    if confidence < 4:
+        conf_meaning = "Market signals are mixed; caution advised."
+    elif 4 <= confidence <= 6:
+        conf_meaning = "Possible reaction at key levels; wait for confirmation."
+    else:
+        conf_meaning = "Strong alignment across indicators."
+
+    combined_insight = (
+        f"*EMA200*: {ema_insight}\n\n"
+        f"*MACD*: {macd_insight}\n\n"
+        f"*RSI* ({last_rsi:.2f}): {rsi_insight}\n\n"
+        f"*Support & Resistance*: {sr_insight}\n\n"
+        f"📝 *Analyst Summary*: \n\n"
+        f"Momentum: *{macd_trend.upper()}*\n"
+        f"Trend context: *{trend.upper()}*\n"
+        f"RSI momentum: *{('strong' if last_rsi > 60 else 'balanced' if 40 <= last_rsi <= 60 else 'weak')}*\n\n"
+        f"{msg}\n\n"
+        f"Overall bias: *{overall.upper()}*, confidence 🌡 *{confidence}/10* — {conf_meaning}"
+    )
+
+    await query.message.reply_text(
+        f"💡 *Market Insights - {ticker}:* _(on last completed 1h candle)_ \n\n{combined_insight}",
+        parse_mode="Markdown"
+    )
+
+    candles, support, resistance = get_key_levels(ticker)
+    chart = create_price_chart_with_levels(ticker, candles, support, resistance)
+
+    # Use bot to send the photo
+    await context.bot.send_photo(
+        chat_id=user_id,
+        photo=chart,
+        caption="📈 Price Chart with Key Levels",
+        parse_mode="Markdown"
+    )
+    
+    return ConversationHandler.END
+
+'''
+async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+
+    # Handle the callback from ticker selection
+    if query:
+        await query.answer()
+        ticker = query.data.replace("ticker_", "")
+        context.user_data["ticker"] = ticker
+    else:
+        # If no query, this is being called directly (shouldn't happen in normal flow)
+        await update.message.reply_text("Send /insights again to select a ticker.")
+        return ConversationHandler.END
+
+    user_id = update.effective_user.id
+    user = db.get(User_Query.user_id == user_id)
+
+    if not user:
+        await query.edit_message_text("❌ Please use /start first.")
+        return ConversationHandler.END
+
+    plan = await get_plan(user)
+
+    if plan == "free":
+        await query.edit_message_text(
+            "❌ This is a Premium feature. You will need to /upgrade to use.",
+            parse_mode='Markdown'
+        )
+        return ConversationHandler.END
 
     price = await fetch_current_price(ticker)
     indicator_results = process_indicators(ticker)
@@ -371,6 +468,19 @@ async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💡 *Market Insights - {ticker}:* _(on last completed 1h candle)_ \n\n{combined_insight}",
         parse_mode="Markdown"
     )
+
+    candles, support, resistance = get_key_levels(ticker)
+    chart = create_price_chart_with_levels(ticker, candles, support, resistance)
+
+    # Use bot to send the photo
+    await context.bot.send_photo(
+        chat_id=user_id,
+        photo=chart,
+        caption="📈 Price Chart with Key Levels",
+        parse_mode="Markdown"
+    )
+    
+    return ConversationHandler.END'''
   
 # --- Whale button handler ----
 async def whale_button_handler(update: Update, context:CallbackContext):
@@ -452,9 +562,9 @@ async def upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE):
     trial_end_short = trial_end.strftime('%Y-%m-%d')  # Short date format
     now = pd.Timestamp.now(tz=pytz.UTC) # localized timestamp
     
-    # if user is on trial version, can subscribe to premium plan - send user to lemon squeezy
-    checkout_url = f"https://lupox.lemonsqueezy.com/checkout?telegram_id={user_id}"
-    billing_url = f"https://lupox.lemonsqueezy.com/billing?telegram_id={user_id}"
+    # if user is on trial version, can subscribe to premium plan - send user to patreon
+    checkout_url = f"https://www.patreon.com/checkout?telegram_id={user_id}"
+    billing_url = f"https://www.patreon.com/billing?telegram_id={user_id}"
     
     if plan == "premium" and trial_end > now and not subscribed:
         await update.message.reply_text(

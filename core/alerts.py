@@ -1,7 +1,7 @@
 # alerts.py
 from config import logger
 from core.db import db, User_Query
-from core.utilities import fetch_current_price, get_plan, calculate_price_change
+from core.utilities import fetch_current_price, get_plan, calculate_price_change, TICKERS
 from core.cache import recent_whales_cache, user_sent_whales, MAX_WHALE_CACHE
 from ripple.xrp_functions import get_whale_txs, format_whale_alert, update_recent_whales, get_candles
 from indicators.data_processing import process_indicators
@@ -11,6 +11,25 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # Proper scheduler instantiation
 scheduler = AsyncIOScheduler()
+
+# --- Save data to db ---
+def save_ticker_data_to_db(interval="1h", limit=100):
+    for ticker in TICKERS:
+        try:
+            candles = get_candles(ticker, interval, limit)
+            if not candles:
+                logger.warning(f"No candle data retrieved for {ticker}. Skipping.")
+                continue
+
+            df = pd.DataFrame(candles, columns=["timestamp", "open", "high", "low", "close", "volume"])
+            df[['open', 'high', 'low', 'close', 'volume']] = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
+            indicators = process_indicators(df)
+
+            # Update DB
+            db.update({'indicators': indicators}, User_Query.ticker == ticker)
+            logger.info(f"Saved indicators for {ticker} to DB.")
+        except Exception as e:
+            logger.error(f"Error saving ticker data for {ticker}: {e}")
 
 # --- Check all the alerts in the DB ---
 async def check_all_alerts(app):
@@ -140,7 +159,7 @@ async def check_all_alerts(app):
         sent_hashes = user_sent_whales.setdefault(user_id, set())
         
         # Whale alerts
-        if user_record.get("watch_status") and plan == "premium" and recent_whales_cache:
+        if user_record.get("watch_status") and recent_whales_cache:
             for tx in recent_whales_cache:
                 if tx["hash"] in sent_hashes:
                     continue

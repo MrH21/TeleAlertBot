@@ -1,9 +1,13 @@
 import pandas as pd
 import pandas_ta as ta
 import numpy as np
+import io
 from ripple.xrp_functions import get_candles
 from core.db import db, User_Query
 from sklearn.cluster import MiniBatchKMeans
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from datetime import datetime
 
 # --- Get key levels using ML clustering ---
 def get_key_levels(symbol, interval="1h", clusters=6):
@@ -34,6 +38,37 @@ def get_key_levels(symbol, interval="1h", clusters=6):
     resistance = [lvl for lvl in levels if lvl > latest_close]
 
     return latest_close, support, resistance
+
+# --- ML Chart processing ---
+def create_price_chart_with_levels(symbol, candles, support, resistance):
+    fig, ax = plt.subplots(figsize=(12,6))
+
+    candles = get_candles(symbol, "1h", 1000)
+    close, support, resistance = get_key_levels(symbol)
+    closes = [c[4] for c in candles]
+
+    # plot price
+    ax.plot(closes, linewidth=2, label='Close Price', color='blue')
+
+    # plot support levels
+    for sup in support:
+        ax.axhline(y=sup, color='green', linestyle='--', linewidth=1, label=f'Support {sup}')
+    for res in resistance:
+        ax.axhline(y=res, color='red', linestyle='--', linewidth=1, label=f'Resistance {res}')
+
+    ax.set_title(f'Price Chart with Key Levels for {symbol}', fontsize=16)
+    ax.set_xlabel('Time', fontsize=14)
+    ax.set_ylabel('Price', fontsize=14)
+    ax.legend()
+    plt.grid(True, alpha=0.3)
+
+    #save to bytes buffer
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+    buf.seek(0)
+    plt.close()
+
+    return buf
 
 
 # --- Process the rsi data ---
@@ -131,37 +166,37 @@ def process_indicators(ticker):
         if nearest_resistance > last_close and dist_to_resistance < near_threshold:
             if macd_trend == "Bullish" and last_rsi < 70:
                 sr_insight = (
-                    f"Price (${last_close:.4f}) is nearing resistance at ${nearest_resistance:.4f}. "
+                    f"Price (${last_close:.4f}) is nearing resistance at ${nearest_resistance:.4f}, with support at ${nearest_support:.4f}. "
                     "Momentum remains positive — potential breakout zone."
                 )
             else:
                 sr_insight = (
-                    f"Price (${last_close:.4f}) is approaching resistance at ${nearest_resistance:.4f}. "
+                    f"Price (${last_close:.4f}) is approaching resistance at ${nearest_resistance:.4f}, with support at ${nearest_support:.4f}. "
                     "Momentum appears to be cooling — watch for possible rejection."
                 )
 
         elif nearest_support < last_close and dist_to_support < near_threshold:
             if macd_trend == "Bearish" and last_rsi > 30:
                 sr_insight = (
-                    f"Price (${last_close:.4f}) is nearing support at ${nearest_support:.4f}. "
+                    f"Price (${last_close:.4f}) is nearing support at ${nearest_support:.4f}, with resistance at ${nearest_resistance:.4f}. "
                     "Selling pressure remains, but a rebound could form if buyers return."
                 )
             else:
                 sr_insight = (
-                    f"Price (${last_close:.4f}) is approaching support at ${nearest_support:.4f}. "
+                    f"Price (${last_close:.4f}) is approaching support at ${nearest_support:.4f}, with resistance at ${nearest_resistance:.4f}. "
                     "Momentum stabilizing — potential bounce zone."
                 )
 
         elif nearest_resistance > last_close and dist_to_resistance < moderate_threshold:
             sr_insight = (
-                f"Price (${last_close:.4f}) is within range of resistance at ${nearest_resistance:.4f}. "
+                f"Price (${last_close:.4f}) is within range of resistance at ${nearest_resistance:.4f}, with support at ${nearest_support:.4f}. "
                 "Monitor for breakout confirmation or pullback."
             )
 
         elif nearest_support < last_close and dist_to_support < moderate_threshold:
             sr_insight = (
-                f"Price (${last_close:.4f}) is within range of support at ${nearest_support:.4f}. "
-                "Market may test this level again soon."
+                f"Price (${last_close:.4f}) is within range of support at ${nearest_support:.4f}, with resistance at ${nearest_resistance:.4f}. "
+                "Market may test support level again soon."
             )
 
         else:

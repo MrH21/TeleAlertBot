@@ -10,9 +10,6 @@ import requests
 from xrpl.asyncio.clients import AsyncJsonRpcClient
 from xrpl.models.requests import Ledger, ServerInfo
 
-# --- Binance url ---
-BINANCE_URL = "https://api.binance.com/api/v3/klines"
-
 # --- Set up wallet database ---
 wdb = TinyDB("exchange_wallets.json")
 wallets_table = wdb.table("wallets")
@@ -24,10 +21,6 @@ if len(wallets_table) == 0:
 # -- XRP Ledger Client and global ledger tracker ---
 last_ledger_index = None
 client = AsyncJsonRpcClient("https://s2.ripple.com:51234/")
-
-# --- ML Parameters --- 
-INTVL = "1d"
-ML_lookback = 500
 
 # --- Classify Network Activity ---
 def classify_activity(age: int, fee: float):
@@ -94,28 +87,6 @@ async def get_xrp_health(lookback_ledgers: int = 20):
         logger.error(f"XRP health error: {e}")
 
     return message
-
-# --- Getting the support and resistance levels ---
-def get_candles(symbol="XRPUSDT", interval=INTVL, limit=ML_lookback):
-    url = f"{BINANCE_URL}?symbol={symbol}&interval={interval}&limit={limit}"
-    data = requests.get(url).json()
-    if not isinstance(data, list):
-        raise ValueError(f"Unexpected API Response: {data}")
-    # each kline
-    candles = []
-    for c in data:
-        try:
-            time = int(c[0])
-            open = float(c[1])
-            high = float(c[2])
-            low = float(c[3])
-            close = float(c[4])
-            volume = float(c[5])
-            
-            candles.append((time, open, high, low, close, volume))
-        except ValueError:
-            continue
-    return candles
 
 # --- Get the exchange by address ---
 def get_exchange_by_address(address):

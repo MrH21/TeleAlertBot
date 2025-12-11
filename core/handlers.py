@@ -288,7 +288,7 @@ async def insight_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                         "You can upgrade to PREMIUM for dynamic insight on tokens. \nProceed to /upgrade to upgrade your plan.", parse_mode='Markdown')
         return ConversationHandler.END
 
-    await update.message.reply_text("📊 Select the ticker:", reply_markup=get_ticker_keyboard(columns=2))
+    await update.message.reply_text("📊 Select the ticker: _(allow few seconds for insight and chart generation)_", reply_markup=get_ticker_keyboard(columns=2))
     return SELECTING_TICKER_INSIGHTS
   
 # --- Market Insights handler ---
@@ -328,7 +328,7 @@ async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if last_entry is None:
         last_entry = process_indicators(ticker)
-        print("No cached data, retreiving fresh data.")
+        print("CACHE: No cached data, retreiving fresh data.")
 
     ema_insight = last_entry.get('ema_insight', '')
     macd_insight = last_entry.get('macd_insight', '')

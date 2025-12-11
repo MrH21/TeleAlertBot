@@ -1,8 +1,8 @@
 from core.db import db, User_Query
 from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS, SELECTING_TICKER_INSIGHTS, SET_PARAMS
 from core.utilities import get_plan, fetch_current_price, get_ticker_keyboard
-from indicators.data_processing import get_key_levels, create_price_chart_with_levels
-from core.cache import recent_whales_cache, get_cached_symbol
+from core.cache import recent_whales_cache
+from indicators.data_processing import process_indicators, create_price_chart_with_levels
 from ripple.xrp_functions import format_whale_alert, get_xrp_health
 from config import logger, ADMIN_ID
 import asyncio
@@ -11,7 +11,12 @@ from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKe
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 import pytz
+import base64
 from tinydb.operations import set
+
+# Initialize cache
+from core.cache import CachedSymbolData
+cache = CachedSymbolData()
 
 # Keyboard Ticker Options
 keyboard_ticker = [['BTCUSDT', 'ETHUSDT'], ['XRPUSDT', 'SOLUSDT'], ['LINKUSDT','DOTUSDT'], ['ADAUSDT','BNBUSDT'], ['SUIUSDT','LTCUSDT']]
@@ -317,28 +322,24 @@ async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     price = await fetch_current_price(ticker)
-    indicator_results = get_cached_symbol(ticker)
+    last_entry = cache.retreive_last(ticker)
+    print(f"CACHE: Last entry from cache for {ticker}: {last_entry}")
 
-    ema_insight = indicator_results.get('insights', {}).get('ema_insight', '')
-    macd_insight = indicator_results.get('insights', {}).get('macd_insight', '')
-    rsi_insight = indicator_results.get('insights', {}).get('rsi_insight', '')
-    macd_trend = indicator_results.get('insights', {}).get('macd_trend', '')
-    last_rsi = indicator_results.get('insights', {}).get('rsi', 0)
-    trend = indicator_results.get('insights', {}).get('trend', '')
-    sr_insight = indicator_results.get('insights', {}).get('sr_insight', '')
-    overall = indicator_results.get('insights', {}).get('overall', '')
-    confidence = indicator_results.get('insights', {}).get('confidence', 0)
-    forecast = indicator_results.get('insights', {}).get('forecast', pd.DataFrame())
+    if last_entry is None:
+        last_entry = process_indicators(ticker)
+        print("No cached data, retreiving fresh data.")
 
-    # Safely format the forecast - escape special characters
-    if not forecast.empty:
-        forecast_str = forecast.to_string()
-        # Escape special Markdown characters
-        forecast_str = forecast_str.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`').replace('[', '\\[').replace(']', '\\]')
-    else:
-        forecast_str = "No forecast data available"
-
-    # --- message formatting same as before ---
+    ema_insight = last_entry.get('ema_insight', '')
+    macd_insight = last_entry.get('macd_insight', '')
+    rsi_insight = last_entry.get('rsi_insight', '')
+    macd_trend = last_entry.get('macd_trend', '')
+    last_rsi = last_entry.get('rsi', 0)
+    trend = last_entry.get('trend', '')
+    sr_insight = last_entry.get('sr_insight', '')
+    overall = last_entry.get('overall', '')
+    confidence = last_entry.get('confidence', 0)
+    
+    # --- message formatting ---
     if "nearing" in sr_insight.lower():
         msg = f"With the current price - ${price:.4f} nearing key levels, watch out for possible breakout."
     elif "approaching" in sr_insight.lower():
@@ -371,16 +372,28 @@ async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-    candles, support, resistance = get_key_levels(ticker)
-    chart = create_price_chart_with_levels(ticker, candles, support, resistance)
-
-    # Use bot to send the photo
-    await context.bot.send_photo(
-        chat_id=user_id,
-        photo=chart,
-        caption="📈 Price Chart with Key Levels",
-        parse_mode="Markdown"
-    )
+    chart = cache.convert_to_image(ticker)
+    try:
+        if chart is None:
+            gen_chart = create_price_chart_with_levels(ticker)
+            chart = base64.b64encode(gen_chart).decode('utf-8')
+            await context.bot.send_photo(
+                chat_id=user_id,
+                photo=chart,
+                caption="📈 Price Chart with Key Levels",
+                parse_mode="Markdown"
+            )
+        else:
+            img_bytes = base64.b64decode(chart)
+            await context.bot.send_photo(
+                chat_id=user_id,
+                photo=img_bytes,
+                caption="📈 Price Chart with Key Levels",
+                parse_mode="Markdown"
+            )
+    except Exception as e:
+        logger.error(f"Error sending chart image for {ticker} to user {user_id}: {e}")
+        await query.message.reply_text("❌ An error occurred while sending the price chart.")
     
     return ConversationHandler.END
 

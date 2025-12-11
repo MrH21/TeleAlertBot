@@ -2,7 +2,7 @@ import pandas as pd
 import pandas_ta as ta
 import numpy as np
 import io
-from ripple.xrp_functions import get_candles
+from core.utilities import get_candles
 from core.db import db, User_Query
 from sklearn.cluster import MiniBatchKMeans
 import matplotlib.pyplot as plt
@@ -43,7 +43,7 @@ def get_key_levels(symbol, interval="1h", clusters=6):
 def create_price_chart_with_levels(symbol, candles, support, resistance):
     fig, ax = plt.subplots(figsize=(12,6))
 
-    candles = get_candles(symbol, "1h", 1000)
+    candles = get_candles(symbol, "1h", 100)
     close, support, resistance = get_key_levels(symbol)
     closes = [c[4] for c in candles]
 
@@ -68,10 +68,12 @@ def create_price_chart_with_levels(symbol, candles, support, resistance):
     buf.seek(0)
     plt.close()
 
-    return buf
+    # convert to base64
+    img_b64 = buf.b64encode(buf.read()).decode('utf-8')
 
+    return img_b64
 
-# --- Process the rsi data ---
+# --- Process the ticker data ---
 def process_indicators(ticker):
     try:
         symbol = ticker.upper()
@@ -281,3 +283,4 @@ def process_indicators(ticker):
     except Exception as e:
         print(f"Error processing indicators: {e}")
         return {}
+    

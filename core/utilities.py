@@ -3,7 +3,6 @@ import pandas as pd
 from config import logger
 import aiohttp
 from core.db import db, User_Query
-from ripple.xrp_functions import get_candles
 from datetime import datetime, timezone
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 

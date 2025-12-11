@@ -8,6 +8,7 @@ from sklearn.cluster import MiniBatchKMeans
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from datetime import datetime
+import base64
 
 # --- Get key levels using ML clustering ---
 def get_key_levels(symbol, interval="1h", clusters=6):
@@ -40,21 +41,28 @@ def get_key_levels(symbol, interval="1h", clusters=6):
     return latest_close, support, resistance
 
 # --- ML Chart processing ---
-def create_price_chart_with_levels(symbol, candles, support, resistance):
+def create_price_chart_with_levels(symbol):
     fig, ax = plt.subplots(figsize=(12,6))
 
     candles = get_candles(symbol, "1h", 100)
     close, support, resistance = get_key_levels(symbol)
+    times = [datetime.fromtimestamp(c[0]/1000) for c in candles]
     closes = [c[4] for c in candles]
 
     # plot price
-    ax.plot(closes, linewidth=2, label='Close Price', color='blue')
+    ax.plot(times, closes, linewidth=2, label='Close Price', color='blue')
 
     # plot support levels
     for sup in support:
         ax.axhline(y=sup, color='green', linestyle='--', linewidth=1, label=f'Support {sup}')
     for res in resistance:
         ax.axhline(y=res, color='red', linestyle='--', linewidth=1, label=f'Resistance {res}')
+
+    # format x-axis
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
+    ax.xaxis.set_major_locator(mdates.HourLocator(interval=10))
+
+    fig.autofmt_xdate()
 
     ax.set_title(f'Price Chart with Key Levels for {symbol}', fontsize=16)
     ax.set_xlabel('Time', fontsize=14)
@@ -69,7 +77,7 @@ def create_price_chart_with_levels(symbol, candles, support, resistance):
     plt.close()
 
     # convert to base64
-    img_b64 = buf.b64encode(buf.read()).decode('utf-8')
+    img_b64 = base64.b64encode(buf.read()).decode('utf-8')
 
     return img_b64
 

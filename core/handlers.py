@@ -12,6 +12,7 @@ import pandas as pd
 from datetime import datetime, timedelta, timezone
 import pytz
 import base64
+import io
 from tinydb.operations import set
 
 # Initialize cache
@@ -375,19 +376,22 @@ async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chart = cache.convert_to_image(ticker)
     try:
         if chart is None:
-            gen_chart = create_price_chart_with_levels(ticker)
-            chart = base64.b64encode(gen_chart).decode('utf-8')
+            img_b64 = create_price_chart_with_levels(ticker)
+            img_bytes = base64.b64decode(img_b64)
+            gen_chart = io.BytesIO(img_bytes)
             await context.bot.send_photo(
                 chat_id=user_id,
-                photo=chart,
+                photo=gen_chart,
                 caption="📈 Price Chart with Key Levels",
                 parse_mode="Markdown"
             )
         else:
             img_bytes = base64.b64decode(chart)
+            img_stream = io.BytesIO(img_bytes)
+            img_stream.name = f"{ticker}.png"
             await context.bot.send_photo(
                 chat_id=user_id,
-                photo=img_bytes,
+                photo=img_stream,
                 caption="📈 Price Chart with Key Levels",
                 parse_mode="Markdown"
             )

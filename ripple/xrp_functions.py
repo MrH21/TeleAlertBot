@@ -230,7 +230,6 @@ async def get_whale_txs(min_xrp=500_000, lookback_ledgers=100):
 
     return whales
 
-
 # --- Classify the whale transaction direction ---
 def classify_whale_tx(tx):
     """
@@ -258,7 +257,6 @@ def classify_whale_tx(tx):
         return f"DEX Trade ({direction})", "DEX", "⚡⚡⚡"
 
     return "Unknown", None, "💡"
-
 
 # --- Format the whale alert ---
 def format_whale_alert(tx, xrp_price=None):

@@ -210,11 +210,11 @@ async def start_scheduler(app, global_tick=60):
             replace_existing=True
         )
 
-        # Cache saving job
+        # Cache saving job - saves processed indicator data every hour
         async def run_hourly_cache_update(app):
             for symbol in TICKERS:  # Your symbol list
                 try:
-                    await cache.save(symbol, process_indicators)
+                    await cache.save_data(symbol, process_indicators)
                 except Exception as e:
                     logger.error(f"Error caching {symbol}: {e}")
 

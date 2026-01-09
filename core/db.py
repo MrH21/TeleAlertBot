@@ -8,6 +8,6 @@ db = TinyDB(db_path)
 # define a query
 User_Query = Query()
 
-# --- Symbol data cache ---
-symbol_db = TinyDB('core/symbol_cache.json')
+# --- Symbol data cache (use single root-level cache file)
+symbol_db = TinyDB('symbol_cache.json')
 Symbol_Query = Query()

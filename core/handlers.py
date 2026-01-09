@@ -1,9 +1,7 @@
 from core.db import db, User_Query
 from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS, SELECTING_TICKER_INSIGHTS, SET_PARAMS
 from core.utilities import get_plan, fetch_current_price, get_ticker_keyboard
-from core.cache import recent_whales_cache
 from indicators.data_processing import process_indicators, create_price_chart_with_levels
-from ripple.xrp_functions import format_whale_alert, get_xrp_health
 from config import logger, ADMIN_ID
 import asyncio
 from telegram.ext import ContextTypes, ConversationHandler, CallbackContext
@@ -62,12 +60,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✨✨ *WELCOME BACK!* ✨✨\n\n"
             f"You are on the *{plan.upper()}* plan "
             f"with {MAX_ALERTS[plan]} alert(s) allowed.\n\n"
-            f"*Subscriber Status*: {'✅ Subscribed' if user.get('subscriber', False) else '❌ Not Subscribed'}\n\n"
-            f"*Whale Alerts*: {'✅ Enabled' if user.get('watch_status', False) else '❌ Disabled'}\n\n",
+            f"*Subscriber Status*: {'✅ Subscribed' if user.get('subscriber', False) else '❌ Not Subscribed'}\n\n",
+            #f"*Whale Alerts*: {'✅ Enabled' if user.get('watch_status', False) else '❌ Disabled'}\n\n",
             parse_mode="Markdown"
         )
 
-    
 # --- Add alert function ----
 async def addalert(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -227,52 +224,6 @@ async def delete_alert_callback(update: Update, context: ContextTypes.DEFAULT_TY
     else:
         await query.edit_message_text("❌ Invalid alert index.")
         
-# --- Whale transaction watcher ---
-async def xrpnet(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    user = db.get(User_Query.user_id == user_id)
-    
-    if not user:
-        await update.message.reply_text("❌ Please use /start first.")
-        return
-    
-    plan = await get_plan(user)
-    
-    message = await get_xrp_health()  # Ensure connection to XRPL server
-    await update.message.reply_text(f"{message}", parse_mode="Markdown")  
-        
-    # Take the last 5 whale transactions
-    preview = recent_whales_cache[-5:]
-
-    #logger.info(f"Recent whale cache for user {user_id}: {preview} on whales command")
-    
-    keyboard = [
-        [InlineKeyboardButton("✅ Enable XRP Alerts", callback_data="whale_on")],
-        [InlineKeyboardButton("❌ Disable XRP Alerts", callback_data="whale_off")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    if not preview:
-        await update.message.reply_text(
-            "🐋 RECENT WHALE TRANSACTIONS\n\n_No recent whale transactions found at the moment_", 
-            parse_mode="Markdown", 
-            reply_markup=reply_markup
-        )
-        return
-    
-    # Format messages
-    xrp_price = await fetch_current_price("XRPUSDT")
-    msgs = [format_whale_alert(tx, xrp_price) for tx in preview]
-    header = f"🐋 *RECENT WHALE TRANSACTIONS*\n\n"
-   
-    full_msg = header + "\n\n".join(msgs)
-    
-    if plan == "premium":
-        await update.message.reply_text(full_msg, parse_mode="Markdown", reply_markup=reply_markup)
-    else:  # Free plan
-        notice = "💡 You are currently on the *Free* plan. To get whale alerts /upgrade"
-        await update.message.reply_text(notice, parse_mode="Markdown")
-        
 # --- Select insights target ---
 async def insight_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -324,11 +275,18 @@ async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     price = await fetch_current_price(ticker)
     last_entry = cache.retreive_last(ticker)
-    print(f"CACHE: Last entry from cache for {ticker}: {last_entry}")
+    if last_entry is not None:
+        print(f"CACHE: Last entry from cache for {ticker} retrieved.")
 
     if last_entry is None:
         last_entry = process_indicators(ticker)
         print("CACHE: No cached data, retreiving fresh data.")
+        # Save the freshly processed insights to cache
+        try:
+            cache.save_data(ticker, process_indicators, create_price_chart_with_levels)
+            print(f"CACHE: Successfully saved insights for {ticker} to cache.")
+        except Exception as e:
+            logger.error(f"Error saving insights to cache for {ticker}: {e}")
 
     ema_insight = last_entry.get('ema_insight', '')
     macd_insight = last_entry.get('macd_insight', '')
@@ -499,25 +457,6 @@ async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return ConversationHandler.END'''
   
-# --- Whale button handler ----
-async def whale_button_handler(update: Update, context:CallbackContext):
-    query = update.callback_query
-    await query.answer()
-
-    user_id = query.from_user.id
-    user = db.get(User_Query.user_id == user_id)
-    
-    if not user:
-        await update.message.reply_text("❌ Please use /start first.")
-        return
-    
-    if query.data == "whale_on":
-        db.update({"watch_status": True}, User_Query.user_id == user_id)
-        await query.edit_message_text("✅ Whale alerts enabled")
-    elif query.data == "whale_off":
-        db.update({"watch_status": False}, User_Query.user_id == user_id)
-        await query.edit_message_text("❌ Whale alerts disabled.")
-        
 # --- Set the Machine Learning parameters ---
 async def set_params(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -545,7 +484,6 @@ async def set_params(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"🛠 *Machine Learning* 🛠 \n\n"
         "This bot uses Machine Learning to calculate support and resistance levels on daily timeframe. You can adjust timeframe to one of following: ", reply_markup=reply_markup, parse_mode="Markdown")
 
-    
 # --- ML Timeline button handler ---
 async def params_button_handler(update: Update, context:CallbackContext):
     query = update.callback_query
@@ -646,14 +584,12 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         total_free = len([user for user in db.all() if user.get("plan") == "free"])
         total_premium = len([user for user in db.all() if user.get("plan") == "premium"])
         total_alerts = sum(len(user.get("alerts", [])) for user in db.all())    
-        total_whale_watchers = len([user for user in db.all() if user.get("watch_status", False)])
-        
+                
         message += (f"👥 Total Users: {total_users}\n"
                     f"💎 Total Subscribers: {total_subscribers}\n"
                     f"🆓 Free Plan Users: {total_free}\n"
                     f"⚡ Premium Plan Users: {total_premium}\n"
-                    f"🚨 Total Alerts Set: {total_alerts}\n"
-                    f"🐋 Total Whale Alert Subscribers: {total_whale_watchers}\n")
+                    f"🚨 Total Alerts Set: {total_alerts}\n")
     except Exception as e:
         logger.error(f"Error fetching stats: {e}")
         message += "❌ Error fetching statistics."

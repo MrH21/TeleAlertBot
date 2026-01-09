@@ -2,9 +2,7 @@
 from config import logger
 from core.db import db, User_Query
 from core.utilities import fetch_current_price, get_candles, get_plan, calculate_price_change, TICKERS
-from core.cache import recent_whales_cache, user_sent_whales, MAX_WHALE_CACHE
-from ripple.xrp_functions import get_whale_txs, format_whale_alert, update_recent_whales
-from indicators.data_processing import process_indicators
+from indicators.data_processing import process_indicators, create_price_chart_with_levels
 import pandas as pd
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -72,7 +70,6 @@ async def check_all_alerts(app):
                 
                 # Skip if not time to check yet
                 if last_checked and (now - pd.Timestamp(last_checked)).total_seconds() < interval:
-                    logger.info(f"SKIPPING {symbol} due to interval.")
                     continue
 
                 # Fetch price once per symbol
@@ -107,7 +104,6 @@ async def check_all_alerts(app):
                     else:
                         change_str = "↔ 0.00%"
 
-                    logger.info(f"Checking {symbol}: price={current_price}, target={price_target}, direction={direction}, hit={hit}")
                 except Exception as e:
                     logger.error(f"Error calculating price change for {symbol}: {e}")
                     
@@ -138,44 +134,6 @@ async def check_all_alerts(app):
             user_record['alerts'].remove(alert)
         # Update DB once per user
         db.update({'alerts': user_record['alerts']}, User_Query.user_id == user_id)
-                
-    # Whale alerts ---------------------------------
-    try: 
-        whale_cache = await get_whale_txs(min_xrp=500_000)
-        # Update global cache        
-        if whale_cache:
-            global recent_whales_cache, user_sent_whales
-            update_recent_whales(whale_cache)
-            recent_whales_cache = recent_whales_cache[-MAX_WHALE_CACHE:]
-            print(f"Found {len(whale_cache)} new whale transaction(s) from running scheduler.")
-        else:
-            print("No new whale transactions found from running scheduler.")
-    except Exception as e:
-        logger.error(f"Error fetching whale transactions: {e}")
-        whale_cache = []
-            
-    for user_record in all_records:
-        user_id = user_record.get('user_id')
-        plan = await get_plan(user_record)
-        current_price = await fetch_current_price("XRPUSDT")
-        
-        sent_hashes = user_sent_whales.setdefault(user_id, set())
-        
-        # Whale alerts
-        if user_record.get("watch_status") and recent_whales_cache:
-            for tx in recent_whales_cache:
-                if tx["hash"] in sent_hashes:
-                    continue
-                msg = format_whale_alert(tx, current_price)
-                try:
-                    await app.bot.send_message(
-                        chat_id=user_id,
-                        text=msg,
-                        parse_mode="Markdown"
-                    )
-                    sent_hashes.add(tx["hash"])
-                except Exception as e:
-                    logger.error(f"Error sending whale alert to {user_id}: {e}")
         
 # --- Start the scheduler ---
 async def start_scheduler(app, global_tick=60):
@@ -213,10 +171,12 @@ async def start_scheduler(app, global_tick=60):
         # Cache saving job - saves processed indicator data every hour
         async def run_hourly_cache_update(app):
             for symbol in TICKERS:  # Your symbol list
-                try:
-                    await cache.save_data(symbol, process_indicators)
-                except Exception as e:
-                    logger.error(f"Error caching {symbol}: {e}")
+                    try:
+                        # process_indicators and create_price_chart_with_levels are sync/blocking
+                        # run them in a thread to avoid awaiting a non-coroutine
+                        await asyncio.to_thread(cache.save_data, symbol, process_indicators, create_price_chart_with_levels)
+                    except Exception as e:
+                        logger.error(f"Error caching {symbol}: {e}")
 
         def job_func_cache():
             asyncio.run_coroutine_threadsafe(run_hourly_cache_update(app), loop)

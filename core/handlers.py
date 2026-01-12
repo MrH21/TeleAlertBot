@@ -243,7 +243,6 @@ async def insight_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return SELECTING_TICKER_INSIGHTS
   
 # --- Market Insights handler ---
-
 async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
 
@@ -358,104 +357,6 @@ async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("❌ An error occurred while sending the price chart.")
     
     return ConversationHandler.END
-
-'''
-async def insights(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-
-    # Handle the callback from ticker selection
-    if query:
-        await query.answer()
-        ticker = query.data.replace("ticker_", "")
-        context.user_data["ticker"] = ticker
-    else:
-        # If no query, this is being called directly (shouldn't happen in normal flow)
-        await update.message.reply_text("Send /insights again to select a ticker.")
-        return ConversationHandler.END
-
-    user_id = update.effective_user.id
-    user = db.get(User_Query.user_id == user_id)
-
-    if not user:
-        await query.edit_message_text("❌ Please use /start first.")
-        return ConversationHandler.END
-
-    plan = await get_plan(user)
-
-    if plan == "free":
-        await query.edit_message_text(
-            "❌ This is a Premium feature. You will need to /upgrade to use.",
-            parse_mode='Markdown'
-        )
-        return ConversationHandler.END
-
-    price = await fetch_current_price(ticker)
-    indicator_results = process_indicators(ticker)
-
-    ema_insight = indicator_results.get('ema_insight', '')
-    macd_insight = indicator_results.get('macd_insight', '')
-    rsi_insight = indicator_results.get('rsi_insight', '')
-    macd_trend = indicator_results.get('macd_trend', '')
-    last_rsi = indicator_results.get('rsi', 0)
-    trend = indicator_results.get('trend', '')
-    sr_insight = indicator_results.get('sr_insight', '')
-    overall = indicator_results.get('overall', '')
-    confidence = indicator_results.get('confidence', 0)
-    forecast = indicator_results.get('forecast', pd.DataFrame())
-
-    # Safely format the forecast - escape special characters
-    if not forecast.empty:
-        forecast_str = forecast.to_string()
-        # Escape special Markdown characters
-        forecast_str = forecast_str.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`').replace('[', '\\[').replace(']', '\\]')
-    else:
-        forecast_str = "No forecast data available"
-
-    # --- message formatting same as before ---
-    if "nearing" in sr_insight.lower():
-        msg = f"With the current price - ${price:.4f} nearing key levels, watch out for possible breakout."
-    elif "approaching" in sr_insight.lower():
-        msg = f"The current price of - ${price:.4f} is approaching key levels, possible rejection ahead."
-    else:
-        msg = f"With the current price - ${price:.4f} trading between key levels, momentum could shift."
-
-    if confidence < 4:
-        conf_meaning = "Market signals are mixed; caution advised."
-    elif 4 <= confidence <= 6:
-        conf_meaning = "Possible reaction at key levels; wait for confirmation."
-    else:
-        conf_meaning = "Strong alignment across indicators."
-
-    combined_insight = (
-        f"*EMA200*: {ema_insight}\n\n"
-        f"*MACD*: {macd_insight}\n\n"
-        f"*RSI* ({last_rsi:.2f}): {rsi_insight}\n\n"
-        f"*Support & Resistance*: {sr_insight}\n\n"
-        f"📝 *Analyst Summary*: \n\n"
-        f"Momentum: *{macd_trend.upper()}*\n"
-        f"Trend context: *{trend.upper()}*\n"
-        f"RSI momentum: *{('strong' if last_rsi > 60 else 'balanced' if 40 <= last_rsi <= 60 else 'weak')}*\n\n"
-        f"{msg}\n\n"
-        f"Overall bias: *{overall.upper()}*, confidence 🌡 *{confidence}/10* — {conf_meaning}"
-    )
-
-    await query.message.reply_text(
-        f"💡 *Market Insights - {ticker}:* _(on last completed 1h candle)_ \n\n{combined_insight}",
-        parse_mode="Markdown"
-    )
-
-    candles, support, resistance = get_key_levels(ticker)
-    chart = create_price_chart_with_levels(ticker, candles, support, resistance)
-
-    # Use bot to send the photo
-    await context.bot.send_photo(
-        chat_id=user_id,
-        photo=chart,
-        caption="📈 Price Chart with Key Levels",
-        parse_mode="Markdown"
-    )
-    
-    return ConversationHandler.END'''
   
 # --- Set the Machine Learning parameters ---
 async def set_params(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -2,7 +2,6 @@ import requests
 from requests.auth import HTTPBasicAuth
 import time
 
-
 class PayPalClient:
     def __init__(self, client_id, secret, sandbox=True):
         # Use REST API hostnames

@@ -20,7 +20,7 @@ from core.cache import CachedSymbolData
 cache = CachedSymbolData()
 
 # Initialize PayPal client
-paypal_client = PayPalClient(PAYPAL_CLIENT_ID, PAYPAL_SECRET, sandbox=(PAYPAL_MODE == "sandbox"))
+paypal_client = PayPalClient(PAYPAL_CLIENT_ID, PAYPAL_SECRET, PAYPAL_MODE == "sandbox")
 
 # Keyboard Ticker Options
 keyboard_ticker = [['BTCUSDT', 'ETHUSDT'], ['XRPUSDT', 'SOLUSDT'], ['LINKUSDT','DOTUSDT'], ['ADAUSDT','BNBUSDT'], ['SUIUSDT','LTCUSDT']]

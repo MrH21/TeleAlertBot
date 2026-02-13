@@ -20,12 +20,22 @@ class PayPalClient:
         if self.access_token and time.time() < self.token_expires_at - 60:
             return self.access_token
 
+        if not self.client_id or not self.secret:
+            raise ValueError("PayPal client_id and secret must be provided (use REST app credentials, not account email).")
+
         response = requests.post(
             f"{self.base_url}/v1/oauth2/token",
             auth=HTTPBasicAuth(self.client_id, self.secret),
             data={"grant_type": "client_credentials"},
         )
-        response.raise_for_status()
+
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as e:
+            # Provide more helpful debug info for 401s
+            text = response.text if response is not None else ""
+            raise requests.HTTPError(f"PayPal token request failed: {response.status_code} {text}") from e
+
         payload = response.json()
         self.access_token = payload["access_token"]
         expires_in = int(payload.get("expires_in", 3300))

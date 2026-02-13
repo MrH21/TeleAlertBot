@@ -2,7 +2,9 @@ from core.db import db, User_Query
 from core.state import SELECTING_TICKER, SETTING_TARGET, SELECTING_DIRECTION, MAX_ALERTS, SELECTING_TICKER_INSIGHTS, SET_PARAMS
 from core.utilities import get_plan, fetch_current_price, get_ticker_keyboard
 from indicators.data_processing import process_indicators, create_price_chart_with_levels
-from config import logger, ADMIN_ID
+from paypal.client import PayPalClient
+from paypal.subscriptions import create_subscription
+from config import logger, ADMIN_ID, PAYPAL_CLIENT_ID, PAYPAL_SECRET, PAYPAL_MODE, PAYPAL_PLAN_ID
 import asyncio
 from telegram.ext import ContextTypes, ConversationHandler, CallbackContext
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
@@ -16,6 +18,9 @@ from tinydb.operations import set
 # Initialize cache
 from core.cache import CachedSymbolData
 cache = CachedSymbolData()
+
+# Initialize PayPal client
+paypal_client = PayPalClient(PAYPAL_CLIENT_ID, PAYPAL_SECRET, sandbox=(PAYPAL_MODE == "sandbox"))
 
 # Keyboard Ticker Options
 keyboard_ticker = [['BTCUSDT', 'ETHUSDT'], ['XRPUSDT', 'SOLUSDT'], ['LINKUSDT','DOTUSDT'], ['ADAUSDT','BNBUSDT'], ['SUIUSDT','LTCUSDT']]
@@ -41,10 +46,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "plan": "premium",
             "trial_expiry": trial_end,
             "alerts": [],
-            "watch": "XRPUSDT",
             "ml_timeline": "1d",
-            "watch_status": True,
-            "subscriber": False
+            "paypal_sub_id": None,
+            "paypal_status": False
         })
         await update.message.reply_text(
             "✨ Welcome to *Crypto Alert Bot*! ✨\n\n"
@@ -60,8 +64,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✨✨ *WELCOME BACK!* ✨✨\n\n"
             f"You are on the *{plan.upper()}* plan "
             f"with {MAX_ALERTS[plan]} alert(s) allowed.\n\n"
-            f"*Subscriber Status*: {'✅ Subscribed' if user.get('subscriber', False) else '❌ Not Subscribed'}\n\n",
-            #f"*Whale Alerts*: {'✅ Enabled' if user.get('watch_status', False) else '❌ Disabled'}\n\n",
+            f"*Subscriber Status*: {'✅ Subscribed' if user.get('paypal_status', False) else '❌ Not Subscribed'}\n\n",
             parse_mode="Markdown"
         )
 
@@ -413,31 +416,58 @@ async def upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     plan = await get_plan(user)
-    subscribed = user.get("subscriber", False)
+    
     trial_end = pd.Timestamp(user.get("trial_expiry", None)).tz_convert('UTC')
     trial_end_short = trial_end.strftime('%Y-%m-%d')  # Short date format
     now = pd.Timestamp.now(tz=pytz.UTC) # localized timestamp
-    
-    # if user is on trial version, can subscribe to premium plan - send user to patreon
-    checkout_url = f"https://www.patreon.com/checkout?telegram_id={user_id}"
-    billing_url = f"https://www.patreon.com/billing?telegram_id={user_id}"
-    
-    if plan == "premium" and trial_end > now and not subscribed:
+
+    paypal_active = user.get("paypal_status", False)
+
+    # Already Subscribed
+    if paypal_active:
         await update.message.reply_text(
-            f"💳 You are currently on the <b>{plan.upper()}</b> plan with trial period ending <b>{trial_end_short}</b>\n\n"
-            f"If you would like to subscribe to the Premium Plan you can here: <a href=\"{checkout_url}\"><b>Subscribe to Premium</b></a>"
-            , parse_mode="HTML")
+            "💳 You are already subscribed to the <b>PREMIUM</b> plan.\n\n"
+            "To manage your subscription visit:\n"
+            "https://www.paypal.com/myaccount/autopay/",
+            parse_mode="HTML"
+        )
         return
-    elif plan == "premium" and subscribed == True:
+    
+    # Active Trial
+    if plan == "premium" and trial_end and trial_end > now:
+        trial_end_short = trial_end.strftime('%Y-%m-%d')
+
         await update.message.reply_text(
-            f"💳 You are already subscribed to the <b>{plan.upper()}</b> plan.\n\n"
-            f"To manage your active subscription, follow this link: <a href=\"{billing_url}\"><b>Manage Subscription</b></a>", parse_mode="HTML")
+            f"💳 You are currently on the <b>PREMIUM</b> trial.\n"
+            f"Trial ends on <b>{trial_end_short}</b>.\n\n"
+            "You can subscribe now to avoid interruption.",
+            parse_mode="HTML"
+        )
         return
-    elif plan == "free":
-        update.message.reply_text(
-            f"💳 You are currently on the <b>{plan.upper()}</b> plan.\n\n"
-            f"To subscribe to Premium, please follow this link: <a href=\"{checkout_url}\"><b>Subscribe to Premium</b></a>", parse_mode="HTML")
-        return
+    
+    # Need new subscription
+    subscription = create_subscription(
+        client=paypal_client,
+        plan_id=PAYPAL_PLAN_ID,
+        return_url=f"https://yourdomain.com/paypal_return?user_id={user_id}",
+        cancel_url=f"https://yourdomain.com/paypal_cancel?user_id={user_id}"
+    )
+    approval_url = subscription["approval_url"]
+
+    db.update(
+        {
+            "paypal_sub_id": subscription["subscription_id"]
+        },
+        User_Query.user_id == user_id
+    )
+
+    await update.message.reply_text(
+        "🚀 Upgrade to <b>PREMIUM</b>\n\n"
+        f"<a href=\"{approval_url}\"><b>Subscribe Now</b></a>",
+        parse_mode="HTML",
+        disable_web_page_preview=True
+    )
+
 
 # --- Broadcast message to all users (admin only) ---
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
